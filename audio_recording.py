@@ -50,7 +50,7 @@ def save_recording_data(transcript, summary, first_name, last_name, filename=Non
     os.makedirs('recordings', exist_ok=True)
 
     # Create user-specific directory using first and last name
-    user_dir = os.path.join('recordings', f"{first_name}{last_name}")
+    user_dir = os.path.join('recordings', f"{first_name}-{last_name}")
     os.makedirs(user_dir, exist_ok=True)
 
     # Generate filename based on timestamp if not provided
@@ -82,8 +82,8 @@ def get_all_users():
         return []
     users = [d for d in os.listdir('recordings') if os.path.isdir(
         os.path.join('recordings', d))]
-    # Reformat user names for better readability
-    formatted_users = [d.replace('_', ' ') for d in users]
+    # Reformat user names for display by replacing hyphens with spaces
+    formatted_users = [d.replace('-', ' ') for d in users]
     return formatted_users
 
 
@@ -127,15 +127,18 @@ with st.sidebar:
 
     if st.button("Create New User"):
         if new_first_name and new_last_name:
+            # Capitalize first and last name for directory creation
+            formatted_first_name = new_first_name.capitalize()
+            formatted_last_name = new_last_name.capitalize()
             new_user_dir = os.path.join(
-                'recordings', f"{new_first_name} {new_last_name}")  # Use space or hyphen here
+                'recordings', f"{formatted_first_name}-{formatted_last_name}")
             os.makedirs(new_user_dir, exist_ok=True)
-            st.success(f"Created new user: {new_first_name} {new_last_name}")
+            st.success(
+                f"Created new user: {formatted_first_name} {formatted_last_name}")
             # Automatically select the new user
-            # Use space or hyphen here
-            st.session_state.selected_user = f"{new_first_name} {new_last_name}"
-            st.session_state.first_name = new_first_name
-            st.session_state.last_name = new_last_name
+            st.session_state.selected_user = f"{formatted_first_name} {formatted_last_name}"
+            st.session_state.first_name = formatted_first_name
+            st.session_state.last_name = formatted_last_name
             st.rerun()
         else:
             st.error("Please enter both first and last name")
@@ -158,7 +161,7 @@ with st.sidebar:
 
 # Load notes from file if it exists
 notes_file_path = os.path.join(
-    'recordings', f"{first_name} {last_name}", 'notes.txt')
+    'recordings', f"{first_name}-{last_name}", 'notes.txt')  # Use hyphen
 if os.path.exists(notes_file_path):
     with open(notes_file_path, 'r') as f:
         st.session_state.notes = f.read()
@@ -266,7 +269,8 @@ if transcript:
 if st.session_state.selected_user:
     with st.expander("Load Previous Recordings"):
         if selected_user:
-            user_dir = os.path.join('recordings', selected_user)
+            user_dir = os.path.join('recordings', selected_user.replace(
+                ' ', '-'))  # Convert space to hyphen
             if os.path.exists(user_dir):
                 recording_files = [f for f in os.listdir(
                     user_dir) if f.endswith('.json')]
