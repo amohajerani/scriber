@@ -1,6 +1,6 @@
 streamlit
 pyaudio
-deepgram-sdk
+streamlit-mic-recorder
 openai
 python-dotenv
 wave
