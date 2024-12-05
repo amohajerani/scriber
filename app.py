@@ -8,7 +8,11 @@ from datetime import datetime
 import re
 
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
+openai_api_key = os.getenv('OPENAI_API_KEY')
+if not openai_api_key:
+    raise ValueError("OPENAI_API_KEY environment variable is not set")
+
+client = openai.OpenAI(api_key=openai_api_key)
 
 # Load system prompt from a file
 
@@ -37,7 +41,7 @@ last_name = ""
 
 
 def get_summary(transcript, system_prompt):
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": system_prompt},
@@ -223,7 +227,7 @@ if transcript:
                     {"role": "user", "content": transcript}
                 ]
 
-                response = openai.chat.completions.create(
+                response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=messages
                 )
