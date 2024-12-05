@@ -269,66 +269,64 @@ if transcript:
             st.success("Changes saved successfully!")
 
 # Add a section to load and edit previous recordings
-if st.session_state.selected_user:
+if selected_user:
     with st.expander("Load Previous Recordings"):
-        if selected_user:
-            user_dir = os.path.join('recordings', selected_user.replace(
-                ' ', '-'))  # Convert space to hyphen
-            if os.path.exists(user_dir):
-                recording_files = [f for f in os.listdir(
-                    user_dir) if f.endswith('.json')]
-                if recording_files:
-                    selected_file = st.selectbox(
-                        "Select a recording to edit:",
-                        recording_files,
-                        format_func=lambda x: x.split('_')[1].split('.')[
-                            0],  # Show timestamp only
-                        key="recording_selector"
-                    )
+        user_dir = os.path.join('recordings', f"{first_name}-{last_name}")
+        if os.path.exists(user_dir):
+            recording_files = [f for f in os.listdir(user_dir)
+                               if f.endswith('.json') and f != 'notes.json']  # Exclude notes file if exists
+            if recording_files:
+                selected_file = st.selectbox(
+                    "Select a recording to edit:",
+                    recording_files,
+                    format_func=lambda x: x.split('_')[1].split('.')[
+                        0],  # Show timestamp only
+                    key="recording_selector"
+                )
 
-                    if selected_file:
-                        file_path = os.path.join(user_dir, selected_file)
-                        data = load_recording_data(file_path)
+                if selected_file:
+                    file_path = os.path.join(user_dir, selected_file)
+                    data = load_recording_data(file_path)
 
-                        # Format the last_modified date
-                        last_modified = datetime.fromisoformat(
-                            data['last_modified'])
-                        formatted_date = last_modified.strftime(
-                            "%Y-%m-%d %H:%M")
+                    # Format the last_modified date
+                    last_modified = datetime.fromisoformat(
+                        data['last_modified'])
+                    formatted_date = last_modified.strftime(
+                        "%Y-%m-%d %H:%M")
 
-                        col1, col2 = st.columns(2)
+                    col1, col2 = st.columns(2)
 
-                        with col1:
-                            st.subheader("Transcript")
-                            edited_transcript = st.text_area(
-                                "Edit transcript:",
-                                value=data["transcript"],
-                                height=300,
-                                key="previous_transcript"
-                            )
+                    with col1:
+                        st.subheader("Transcript")
+                        edited_transcript = st.text_area(
+                            "Edit transcript:",
+                            value=data["transcript"],
+                            height=300,
+                            key="previous_transcript"
+                        )
 
-                        with col2:
-                            st.subheader("Summary")
-                            edited_summary = st.text_area(
-                                "Edit summary:",
-                                value=data["summary"],
-                                height=300,
-                                key="previous_summary"
-                            )
+                    with col2:
+                        st.subheader("Summary")
+                        edited_summary = st.text_area(
+                            "Edit summary:",
+                            value=data["summary"],
+                            height=300,
+                            key="previous_summary"
+                        )
 
-                        # Display formatted last updated date
-                        st.markdown(f"**Last Updated:** {formatted_date}")
+                    # Display formatted last updated date
+                    st.markdown(f"**Last Updated:** {formatted_date}")
 
-                        if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
-                            save_recording_data(edited_transcript,
-                                                edited_summary,
-                                                st.session_state.first_name,
-                                                st.session_state.last_name,
-                                                filename=file_path)
-                            st.success("Changes saved successfully!")
-                else:
-                    st.info("No previous recordings found for this user")
+                    if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
+                        save_recording_data(edited_transcript,
+                                            edited_summary,
+                                            st.session_state.first_name,
+                                            st.session_state.last_name,
+                                            filename=file_path)
+                        st.success("Changes saved successfully!")
             else:
                 st.info("No previous recordings found for this user")
         else:
-            st.info("Please select a user from the sidebar")
+            st.info("No previous recordings found for this user")
+else:
+    st.info("Please select a user from the sidebar")
