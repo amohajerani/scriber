@@ -32,6 +32,9 @@ system_prompt = load_system_prompt(system_prompt_file)
 DEFAULT_SYSTEM_PROMPT = """Please provide a concise summary of the following transcript, 
 highlighting the key points and main ideas discussed."""
 
+first_name = ""
+last_name = ""
+
 
 def get_summary(transcript, system_prompt):
     response = openai.chat.completions.create(
@@ -159,15 +162,15 @@ with st.sidebar:
             system_prompt = updated_system_prompt
             st.success("System prompt updated successfully!")
 
-# Load notes from file if it exists
-notes_file_path = os.path.join(
-    'recordings', f"{first_name}-{last_name}", 'notes.txt')  # Use hyphen
-if os.path.exists(notes_file_path):
-    with open(notes_file_path, 'r') as f:
-        st.session_state.notes = f.read()
 
 # In the main content area, display the selected user's name
 if selected_user:
+    # Load notes from file if it exists
+    notes_file_path = os.path.join(
+        'recordings', f"{first_name}-{last_name}", 'notes.txt')  # Use hyphen
+    if os.path.exists(notes_file_path):
+        with open(notes_file_path, 'r') as f:
+            st.session_state.notes = f.read()
     st.header(f"{first_name} {last_name}".title())
     # Text area for notes
     st.subheader("Notes")
