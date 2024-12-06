@@ -10,13 +10,15 @@ from streamlit.components.v1 import html
 import pyperclip
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+import ssl
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
 mongo_client = MongoClient(
     os.getenv('MONGO_URI'),
     tls=True,
-    tlsAllowInvalidCertificates=False,
+    tlsAllowInvalidCertificates=True,
+    ssl_cert_reqs=ssl.CERT_NONE,
     serverSelectionTimeoutMS=5000
 )
 db = mongo_client['scriber']
