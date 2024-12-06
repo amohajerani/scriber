@@ -14,14 +14,30 @@ import ssl
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
-mongo_client = MongoClient(
-    os.getenv('MONGO_URI'),
-    tls=True,
-    tlsAllowInvalidCertificates=True,
-    ssl_cert_reqs=ssl.CERT_NONE,
-    serverSelectionTimeoutMS=5000
-)
-db = mongo_client['scriber']
+
+# Initialize connection
+
+
+@st.cache_resource
+def init_connection():
+    try:
+        return MongoClient(
+            os.getenv('MONGO_URI'),
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=20000
+        )
+    except Exception as e:
+        st.error(f"Could not connect to MongoDB: {str(e)}")
+        return None
+
+
+# Initialize the client
+mongo_client = init_connection()
+if mongo_client:
+    db = mongo_client['scriber']
+else:
+    st.error("Failed to initialize MongoDB connection")
+    st.stop()
 
 
 def load_system_prompts():
