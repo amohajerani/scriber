@@ -21,11 +21,17 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 @st.cache_resource
 def init_connection():
     try:
-        return MongoClient(
+        # Add SSL configuration and increase timeouts
+        client = MongoClient(
             os.getenv('MONGO_URI'),
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=20000
+            serverSelectionTimeoutMS=30000,  # Increased from 5000
+            connectTimeoutMS=30000,          # Increased from 20000
+            ssl=True,
+            ssl_cert_reqs=ssl.CERT_NONE     # Added SSL configuration
         )
+        # Test the connection
+        client.admin.command('ping')
+        return client
     except Exception as e:
         st.error(f"Could not connect to MongoDB: {str(e)}")
         return None
@@ -35,12 +41,15 @@ def init_connection():
 mongo_client = init_connection()
 if mongo_client:
     db = mongo_client['scriber']
+    try:
+        # Move the print statement inside a try-except block
+        collections = db.list_collection_names()
+        print("Available collections:", collections)
+    except Exception as e:
+        st.error(f"Error listing collections: {str(e)}")
 else:
     st.error("Failed to initialize MongoDB connection")
     st.stop()
-
-# print the name of the collections
-print(db.list_collection_names())
 
 
 def load_system_prompts():
