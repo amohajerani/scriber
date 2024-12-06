@@ -120,6 +120,8 @@ with st.sidebar:
             1 if selected_user in users else 0
         )
 
+        st.session_state.selected_user = selected_user
+
         if selected_user:
             first_name, last_name = split_user_name(selected_user)
         else:
@@ -168,13 +170,19 @@ with st.sidebar:
 
 # In the main content area, display the selected user's name
 if selected_user:
+    # Initialize notes in session state if it doesn't exist
+    if 'notes' not in st.session_state:
+        st.session_state.notes = ""
+
     # Load notes from file if it exists
     notes_file_path = os.path.join(
-        'recordings', f"{first_name}-{last_name}", 'notes.txt')  # Use hyphen
+        'recordings', f"{first_name}-{last_name}", 'notes.txt')
     if os.path.exists(notes_file_path):
         with open(notes_file_path, 'r') as f:
             st.session_state.notes = f.read()
+
     st.header(f"{first_name} {last_name}".title())
+
     # Text area for notes
     st.subheader("Notes")
     notes = st.text_area("Enter your notes here:",
@@ -186,153 +194,130 @@ if selected_user:
             f.write(notes)
         st.success("Notes saved successfully!")
         st.session_state.notes = notes
+
     st.header("Recording Session")
 
-# Update session state with the selected user's information
-if 'first_name' not in st.session_state or st.session_state.first_name != first_name:
-    st.session_state.first_name = first_name
-if 'last_name' not in st.session_state or st.session_state.last_name != last_name:
-    st.session_state.last_name = last_name
+    # Move the recording functionality here
+    transcript = whisper_stt(openai_api_key=os.getenv(
+        'OPENAI_API_KEY'), language='en')
 
-# Initialize session state for notes if it doesn't exist or if the user has changed
-if 'notes' not in st.session_state or st.session_state.selected_user != selected_user:
-    st.session_state.notes = ""
+    # Rest of the recording logic...
+    if transcript:
+        # Only process and save if it's a new transcript
+        if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
+            st.session_state.last_transcript = transcript
 
+            # Generate summary
+            try:
+                with st.spinner('Generating summary...'):
+                    messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": transcript}
+                    ]
 
-# Initialize session state for summary if it doesn't exist
-if 'summary' not in st.session_state:
-    st.session_state.summary = ""
-if 'last_transcript' not in st.session_state:
-    st.session_state.last_transcript = ""
-
-# Initialize session state for file tracking
-if 'current_file' not in st.session_state:
-    st.session_state.current_file = None
-
-transcript = whisper_stt(openai_api_key=os.getenv(
-    'OPENAI_API_KEY'), language='en')
-
-# If you don't pass an API key, the function will attempt to retrieve it as an environment variable : 'OPENAI_API_KEY'.
-if transcript:
-    # Only process and save if it's a new transcript
-    if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
-        st.session_state.last_transcript = transcript
-
-        # Generate summary
-        try:
-            with st.spinner('Generating summary...'):
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": transcript}
-                ]
-                
-                response = openai.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=messages
-                )
-                summary = response.choices[0].message.content
-
-                # Save to disk immediately
-                st.session_state.current_file = save_recording_data(
-                    transcript, summary, first_name, last_name)
-                st.success("Recording saved successfully!")
-        except Exception as e:
-            st.error(f"Error processing recording: {str(e)}")
-            st.stop()
-
-    # Load the saved data from disk
-    if st.session_state.current_file:
-        saved_data = load_recording_data(st.session_state.current_file)
-
-        # Create two columns for transcript and summary
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Transcript")
-            edited_transcript = st.text_area(
-                "Edit transcript:",
-                value=saved_data["transcript"],
-                height=300,
-                key="current_transcript"
-            )
-
-        with col2:
-            st.subheader("Summary")
-            edited_summary = st.text_area(
-                "Edit summary:",
-                value=saved_data["summary"],
-                height=300,
-                key="current_summary"
-            )
-
-        # Add a button to save changes
-        if st.button("Save Changes", key="save_current_btn"):
-            save_recording_data(edited_transcript, edited_summary, first_name, last_name,
-                                filename=st.session_state.current_file)
-            st.success("Changes saved successfully!")
-
-# Add a section to load and edit previous recordings
-if st.session_state.selected_user:
-    with st.expander("Load Previous Recordings"):
-        if selected_user:
-            user_dir = os.path.join('recordings', selected_user.replace(
-                ' ', '-'))  # Convert space to hyphen
-            if os.path.exists(user_dir):
-                recording_files = [f for f in os.listdir(
-                    user_dir) if f.endswith('.json')]
-                if recording_files:
-                    selected_file = st.selectbox(
-                        "Select a recording to edit:",
-                        recording_files,
-                        format_func=lambda x: x.split('_')[1].split('.')[
-                            0],  # Show timestamp only
-                        key="recording_selector"
+                    response = openai.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages
                     )
+                    summary = response.choices[0].message.content
 
-                    if selected_file:
-                        file_path = os.path.join(user_dir, selected_file)
-                        data = load_recording_data(file_path)
+                    # Save to disk immediately
+                    st.session_state.current_file = save_recording_data(
+                        transcript, summary, first_name, last_name)
+                    st.success("Recording saved successfully!")
+            except Exception as e:
+                st.error(f"Error processing recording: {str(e)}")
+                st.stop()
 
-                        # Format the last_modified date
-                        last_modified = datetime.fromisoformat(
-                            data['last_modified'])
-                        formatted_date = last_modified.strftime(
-                            "%Y-%m-%d %H:%M")
+        # Load the saved data from disk
+        if st.session_state.current_file:
+            saved_data = load_recording_data(st.session_state.current_file)
 
-                        col1, col2 = st.columns(2)
+            # Create two columns for transcript and summary
+            col1, col2 = st.columns(2)
 
-                        with col1:
-                            st.subheader("Transcript")
-                            edited_transcript = st.text_area(
-                                "Edit transcript:",
-                                value=data["transcript"],
-                                height=300,
-                                key="previous_transcript"
-                            )
+            with col1:
+                st.subheader("Transcript")
+                edited_transcript = st.text_area(
+                    "Edit transcript:",
+                    value=saved_data["transcript"],
+                    height=300,
+                    key="current_transcript"
+                )
 
-                        with col2:
-                            st.subheader("Summary")
-                            edited_summary = st.text_area(
-                                "Edit summary:",
-                                value=data["summary"],
-                                height=300,
-                                key="previous_summary"
-                            )
+            with col2:
+                st.subheader("Summary")
+                edited_summary = st.text_area(
+                    "Edit summary:",
+                    value=saved_data["summary"],
+                    height=300,
+                    key="current_summary"
+                )
 
-                        # Display formatted last updated date
-                        st.markdown(f"**Last Updated:** {formatted_date}")
+            # Add a button to save changes
+            if st.button("Save Changes", key="save_current_btn"):
+                save_recording_data(edited_transcript, edited_summary, first_name, last_name,
+                                    filename=st.session_state.current_file)
+                st.success("Changes saved successfully!")
 
-                        if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
-                            save_recording_data(edited_transcript,
-                                                edited_summary,
-                                                st.session_state.first_name,
-                                                st.session_state.last_name,
-                                                filename=file_path)
-                            st.success("Changes saved successfully!")
-                else:
-                    st.info("No previous recordings found for this user")
+    # Add a section to load and edit previous recordings
+    with st.expander("Load Previous Recordings"):
+        user_dir = os.path.join('recordings', f"{first_name}-{last_name}")
+        if os.path.exists(user_dir):
+            recording_files = [f for f in os.listdir(
+                user_dir) if f.endswith('.json')]
+            if recording_files:
+                selected_file = st.selectbox(
+                    "Select a recording to edit:",
+                    recording_files,
+                    format_func=lambda x: x.split('_')[1].split('.')[
+                        0],  # Show timestamp only
+                    key="recording_selector"
+                )
+
+                if selected_file:
+                    file_path = os.path.join(user_dir, selected_file)
+                    data = load_recording_data(file_path)
+
+                    # Format the last_modified date
+                    last_modified = datetime.fromisoformat(
+                        data['last_modified'])
+                    formatted_date = last_modified.strftime(
+                        "%Y-%m-%d %H:%M")
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.subheader("Transcript")
+                        edited_transcript = st.text_area(
+                            "Edit transcript:",
+                            value=data["transcript"],
+                            height=300,
+                            key="previous_transcript"
+                        )
+
+                    with col2:
+                        st.subheader("Summary")
+                        edited_summary = st.text_area(
+                            "Edit summary:",
+                            value=data["summary"],
+                            height=300,
+                            key="previous_summary"
+                        )
+
+                    # Display formatted last updated date
+                    st.markdown(f"**Last Updated:** {formatted_date}")
+
+                    if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
+                        save_recording_data(edited_transcript,
+                                            edited_summary,
+                                            st.session_state.first_name,
+                                            st.session_state.last_name,
+                                            filename=file_path)
+                        st.success("Changes saved successfully!")
             else:
                 st.info("No previous recordings found for this user")
         else:
-            st.info("Please select a user from the sidebar")
-
+            st.info("No previous recordings found for this user")
+else:
+    st.info("Please select a user from the sidebar")
