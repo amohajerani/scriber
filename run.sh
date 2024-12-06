@@ -1,1 +1,1 @@
-python3 -m streamlit run audio_recording.py
+python3 -m streamlit run app.py

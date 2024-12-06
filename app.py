@@ -8,7 +8,9 @@ from datetime import datetime
 import re
 
 load_dotenv()
+
 openai.api_key = os.getenv('OPENAI_API_KEY')
+
 
 # Load system prompt from a file
 
@@ -38,6 +40,7 @@ last_name = ""
 
 def get_summary(transcript, system_prompt):
     response = openai.chat.completions.create(
+
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": system_prompt},
@@ -222,7 +225,7 @@ if transcript:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": transcript}
                 ]
-
+                
                 response = openai.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=messages
@@ -332,3 +335,4 @@ if st.session_state.selected_user:
                 st.info("No previous recordings found for this user")
         else:
             st.info("Please select a user from the sidebar")
+
