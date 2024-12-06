@@ -10,10 +10,17 @@ from streamlit.components.v1 import html
 import pyperclip
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from user_utils import create_user, verify_user
 import ssl
+import hashlib
+import hmac
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize session state right after imports and before any other Streamlit commands
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
 
 # Initialize connection
 
@@ -37,12 +44,7 @@ def init_connection():
 mongo_client = init_connection()
 if mongo_client:
     db = mongo_client['scriber']
-    try:
-        # Move the print statement inside a try-except block
-        collections = db.list_collection_names()
-        print("Available collections:", collections)
-    except Exception as e:
-        st.error(f"Error listing collections: {str(e)}")
+
 else:
     st.error("Failed to initialize MongoDB connection")
     st.stop()
@@ -228,11 +230,55 @@ def get_patient_notes(patient_id):
     return patient.get("notes", "") if patient else ""
 
 
-# Streamlit UI
+# Authentication UI
+if not st.session_state.authenticated:
+    st.title("Login")
+
+    tab1, tab2 = st.tabs(["Login", "Register"])
+
+    with tab1:
+        login_email = st.text_input("Email", key="login_email_field")
+        login_password = st.text_input(
+            "Password", type="password", key="login_password_field")
+
+        if st.button("Login", key="login_button"):
+            if verify_user(login_email, login_password, db):
+                st.session_state.authenticated = True
+                st.success("Logged in successfully!")
+                st.rerun()
+            else:
+                st.error("Invalid email or password")
+
+    with tab2:
+        new_email = st.text_input("Email", key="register_email")
+        new_password = st.text_input(
+            "Password", type="password", key="register_password")
+        confirm_password = st.text_input("Confirm Password", type="password")
+
+        if st.button("Register"):
+            if new_password != confirm_password:
+                st.error("Passwords do not match")
+            elif not new_email or not new_password:
+                st.error("Please fill in all fields")
+            else:
+                success, message = create_user(new_email, new_password, db)
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
+
+    st.stop()  # Prevent the rest of the app from loading
+
+# Original app code starts here
 st.title("Scribe")
 
 # Sidebar for patient selection
 with st.sidebar:
+    if st.button("Logout"):
+        st.session_state.authenticated = False
+        st.rerun()
+
+    st.divider()
     st.header("Patient Selection")
     patients = get_all_patients()
     if 'selected_patient' not in st.session_state:
@@ -552,3 +598,40 @@ if st.session_state.selected_patient:
             st.info("No previous recordings found for this patient")
 else:
     st.info("Please select a patient from the sidebar")
+
+# Add these functions after the existing initialization code
+
+
+def hash_password(password):
+    """Hash a password using SHA-256"""
+    salt = os.getenv('PASSWORD_SALT', 'default_salt')
+    return hmac.new(salt.encode(), password.encode(), hashlib.sha256).hexdigest()
+
+
+def create_user(email, password):
+    """Create a new user in the database"""
+    if db.users.find_one({"email": email}):
+        return False, "Email already exists"
+
+    hashed_password = hash_password(password)
+    db.users.insert_one({
+        "email": email,
+        "password": hashed_password,
+        "created_at": datetime.now()
+    })
+    return True, "User created successfully"
+
+
+def verify_user(email, password):
+    """Verify user credentials"""
+    user = db.users.find_one({"email": email})
+    if not user:
+        return False
+
+    hashed_password = hash_password(password)
+    return hmac.compare_digest(user['password'], hashed_password)
+
+
+# Add this right after the load_dotenv() call
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
