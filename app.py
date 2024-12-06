@@ -13,7 +13,12 @@ from bson.objectid import ObjectId
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
-mongo_client = MongoClient(os.getenv('MONGO_URI'))
+mongo_client = MongoClient(
+    os.getenv('MONGO_URI'),
+    tls=True,
+    tlsAllowInvalidCertificates=False,
+    serverSelectionTimeoutMS=5000
+)
 db = mongo_client['scriber']
 
 
@@ -405,7 +410,7 @@ if st.session_state.selected_patient:
                         pyperclip.copy(saved_data["summary"])
                         st.toast('Copied to clipboard!')
                 with header_col3:
-                    if st.button("���", key="regenerate_summary", use_container_width=False):
+                    if st.button("", key="regenerate_summary", use_container_width=False):
                         with st.spinner('Generating new summary...'):
                             system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
                             new_summary = get_summary(
