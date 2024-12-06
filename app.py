@@ -6,6 +6,8 @@ import openai
 import json
 from datetime import datetime
 import re
+from streamlit.components.v1 import html
+import pyperclip
 
 load_dotenv()
 
@@ -17,22 +19,10 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 
 def load_system_prompts(file_path='system-prompts.json'):
     # Default prompts that will be used if file doesn't exist or is invalid
-    default_prompts = {
-        "Initial Intake": "Please analyze this initial visit transcript and create a structured summary that includes:\n1. Chief complaints and presenting issues\n2. Relevant medical, social, and family history\n3. Current medications and allergies\n4. Mental status observations\n5. Initial assessment and impressions\n6. Recommended treatment plan\n7. Next steps and follow-up recommendations",
 
-        "Follow-up Visit": "Please analyze this follow-up visit transcript and create a structured summary that includes:\n1. Progress since last visit\n2. Current symptoms and concerns\n3. Response to current treatment plan\n4. Any new issues or complications\n5. Adjustments to treatment plan\n6. Recommendations for continued care\n7. Next appointment timeline"
-    }
-
-    try:
-        with open(file_path, 'r') as file:
-            loaded_prompts = json.load(file)
-            if loaded_prompts:  # Check if the loaded data is not empty
-                return loaded_prompts
-            return default_prompts
-    except (FileNotFoundError, json.JSONDecodeError):
-        # If file doesn't exist or is invalid, create it with default prompts
-        save_system_prompts(file_path, default_prompts)
-        return default_prompts
+    with open(file_path, 'r') as file:
+        loaded_prompts = json.load(file)
+        return loaded_prompts
 
 
 def save_system_prompts(file_path, prompts):
@@ -114,6 +104,33 @@ def split_user_name(combined_name):
     return combined_name, ""
 
 
+# Add this new function after the imports
+def create_copy_button(text, button_id):
+    """Create a copy button for the specified text"""
+    # Escape special characters for JavaScript
+    escaped_text = text.replace('`', '\\`').replace(
+        '\\', '\\\\').replace('\n', '\\n')
+    copy_js = f"""
+        <script>
+        function copyText{button_id}() {{
+            const text = `{escaped_text}`;
+            navigator.clipboard.writeText(text).then(function() {{
+                console.log('Text copied');
+            }}).catch(function(err) {{
+                console.error('Failed to copy text:', err);
+            }});
+        }}
+        </script>
+        <button 
+            onclick="copyText{button_id}()"
+            style="background-color: transparent; border: none; padding: 0; margin-left: 5px; cursor: pointer; font-size: 20px;"
+        >
+            🔗
+        </button>
+    """
+    return copy_js
+
+
 # Streamlit UI
 st.title("Scribe")
 
@@ -166,7 +183,7 @@ with st.sidebar:
 
     # Add system prompt in a collapsed expander
     st.divider()
-    with st.expander("System Prompts", expanded=False):
+    with st.expander("Select System Prompt", expanded=False):
         # Load all prompts
         system_prompts = load_system_prompts()
 
@@ -203,6 +220,12 @@ with st.sidebar:
 
         # Use the selected prompt for processing
         system_prompt = system_prompts[selected_prompt_name]
+
+    # Add this right after the system prompt expander in the sidebar
+    with st.sidebar:
+        st.divider()
+        st.markdown("**Current Prompt Template:**")
+        st.info(selected_prompt_name)
 
 
 # In the main content area, display the selected user's name
@@ -274,18 +297,49 @@ if selected_user:
             col1, col2 = st.columns(2)
 
             with col1:
-                st.subheader("Transcript")
+                # Create a container for subheader and icon
+                header_col1, header_col2 = st.columns([0.8, 0.2])
+                with header_col1:
+                    st.subheader("Transcript")
+                with header_col2:
+                    st.write("")  # Spacing for vertical alignment
+                    if st.button("🔗", key=f"copy_transcript_{saved_data['transcript'][:10]}", use_container_width=False):
+                        pyperclip.copy(saved_data["transcript"])
+                        st.toast('Copied to clipboard!')
+
                 edited_transcript = st.text_area(
-                    "Edit transcript:",
+                    label="Transcript content",
+                    label_visibility="hidden",
                     value=saved_data["transcript"],
                     height=300,
                     key="current_transcript"
                 )
 
             with col2:
-                st.subheader("Summary")
+                # Create a container for subheader and icon
+                header_col1, header_col2, header_col3 = st.columns(
+                    [0.6, 0.2, 0.2])
+                with header_col1:
+                    st.subheader("Summary")
+                with header_col2:
+                    st.write("")  # Spacing for vertical alignment
+                    if st.button("🔗", key=f"copy_summary_{saved_data['summary'][:10]}", use_container_width=False):
+                        pyperclip.copy(saved_data["summary"])
+                        st.toast('Copied to clipboard!')
+                with header_col3:
+                    if st.button("🔄", key="regenerate_summary", use_container_width=False):
+                        with st.spinner('Generating new summary...'):
+                            new_summary = get_summary(
+                                edited_transcript, system_prompt)
+                            # Update the saved data with new summary
+                            save_recording_data(edited_transcript, new_summary, first_name, last_name,
+                                                filename=st.session_state.current_file)
+                            st.success("Summary regenerated successfully!")
+                            st.rerun()
+
                 edited_summary = st.text_area(
-                    "Edit summary:",
+                    label="Summary content",
+                    label_visibility="hidden",
                     value=saved_data["summary"],
                     height=300,
                     key="current_summary"
@@ -325,18 +379,49 @@ if selected_user:
                     col1, col2 = st.columns(2)
 
                     with col1:
-                        st.subheader("Transcript")
+                        # Create a container for subheader and icon
+                        header_col1, header_col2 = st.columns([0.8, 0.2])
+                        with header_col1:
+                            st.subheader("Transcript")
+                        with header_col2:
+                            st.write("")  # Spacing for vertical alignment
+                            if st.button("🔗", key=f"copy_transcript_{data['transcript'][:10]}", use_container_width=False):
+                                pyperclip.copy(data["transcript"])
+                                st.toast('Copied to clipboard!')
                         edited_transcript = st.text_area(
-                            "Edit transcript:",
+                            label="Previous transcript content",
+                            label_visibility="hidden",
                             value=data["transcript"],
                             height=300,
                             key="previous_transcript"
                         )
 
                     with col2:
-                        st.subheader("Summary")
+                        # Create a container for subheader and icon
+                        header_col1, header_col2, header_col3 = st.columns(
+                            [0.6, 0.2, 0.2])
+                        with header_col1:
+                            st.subheader("Summary")
+                        with header_col2:
+                            st.write("")  # Spacing for vertical alignment
+                            if st.button("🔗", key=f"copy_summary_{data['summary'][:10]}", use_container_width=False):
+                                pyperclip.copy(data["summary"])
+                                st.toast('Copied to clipboard!')
+                        with header_col3:
+                            if st.button("🔄", key="regenerate_previous_summary", use_container_width=False):
+                                with st.spinner('Generating new summary...'):
+                                    new_summary = get_summary(
+                                        edited_transcript, system_prompt)
+                                    # Update the saved data with new summary
+                                    save_recording_data(edited_transcript, new_summary, first_name, last_name,
+                                                        filename=file_path)
+                                    st.success(
+                                        "Summary regenerated successfully!")
+                                    st.rerun()
+
                         edited_summary = st.text_area(
-                            "Edit summary:",
+                            label="Previous summary content",
+                            label_visibility="hidden",
                             value=data["summary"],
                             height=300,
                             key="previous_summary"

@@ -6,3 +6,4 @@ python-dotenv
 #wave
 #aiohttp
 streamlit-mic-recorder
+pyperclip
