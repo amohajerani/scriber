@@ -385,7 +385,7 @@ if selected_user:
                             st.subheader("Transcript")
                         with header_col2:
                             st.write("")  # Spacing for vertical alignment
-                            if st.button("🔗", key=f"copy_transcript_{data['transcript'][:10]}", use_container_width=False):
+                            if st.button("🔗", key=f"copy_transcript_prev_{selected_file}", use_container_width=False):
                                 pyperclip.copy(data["transcript"])
                                 st.toast('Copied to clipboard!')
                         edited_transcript = st.text_area(
@@ -404,17 +404,16 @@ if selected_user:
                             st.subheader("Summary")
                         with header_col2:
                             st.write("")  # Spacing for vertical alignment
-                            if st.button("🔗", key=f"copy_summary_{data['summary'][:10]}", use_container_width=False):
+                            if st.button("🔗", key=f"copy_summary_prev_{selected_file}", use_container_width=False):
                                 pyperclip.copy(data["summary"])
                                 st.toast('Copied to clipboard!')
                         with header_col3:
-                            if st.button("🔄", key="regenerate_previous_summary", use_container_width=False):
+                            if st.button("🔄", key=f"regenerate_summary_prev_{selected_file}", use_container_width=False):
                                 with st.spinner('Generating new summary...'):
                                     new_summary = get_summary(
                                         edited_transcript, system_prompt)
-                                    # Update the saved data with new summary
-                                    save_recording_data(edited_transcript, new_summary, first_name, last_name,
-                                                        filename=file_path)
+                                    save_recording_data(
+                                        edited_transcript, new_summary, first_name, last_name, filename=file_path)
                                     st.success(
                                         "Summary regenerated successfully!")
                                     st.rerun()
