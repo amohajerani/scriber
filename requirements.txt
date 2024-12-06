@@ -1,8 +1,8 @@
-#streamlit==1.38.0
-#pyaudio==1.0.1
-openai==1.56.2
-streamlit-mic-recorder
-
+streamlit
+pyaudio
+deepgram-sdk
+openai
 python-dotenv
-#wave==0.0.2
-#aiohttp==3.9.3
+wave
+aiohttp
+streamlit-mic-recorder
