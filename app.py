@@ -15,9 +15,29 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 # Load system prompt from a file
 
 
-def load_system_prompt(file_path):
-    with open(file_path, 'r') as file:
-        return file.read().strip()
+def load_system_prompts(file_path='system-prompts.json'):
+    # Default prompts that will be used if file doesn't exist or is invalid
+    default_prompts = {
+        "Initial Intake": "Please analyze this initial visit transcript and create a structured summary that includes:\n1. Chief complaints and presenting issues\n2. Relevant medical, social, and family history\n3. Current medications and allergies\n4. Mental status observations\n5. Initial assessment and impressions\n6. Recommended treatment plan\n7. Next steps and follow-up recommendations",
+
+        "Follow-up Visit": "Please analyze this follow-up visit transcript and create a structured summary that includes:\n1. Progress since last visit\n2. Current symptoms and concerns\n3. Response to current treatment plan\n4. Any new issues or complications\n5. Adjustments to treatment plan\n6. Recommendations for continued care\n7. Next appointment timeline"
+    }
+
+    try:
+        with open(file_path, 'r') as file:
+            loaded_prompts = json.load(file)
+            if loaded_prompts:  # Check if the loaded data is not empty
+                return loaded_prompts
+            return default_prompts
+    except (FileNotFoundError, json.JSONDecodeError):
+        # If file doesn't exist or is invalid, create it with default prompts
+        save_system_prompts(file_path, default_prompts)
+        return default_prompts
+
+
+def save_system_prompts(file_path, prompts):
+    with open(file_path, 'w') as file:
+        json.dump(prompts, file, indent=4)
 
 # Save updated system prompt to a file
 
@@ -26,13 +46,6 @@ def save_system_prompt(file_path, prompt):
     with open(file_path, 'w') as file:
         file.write(prompt)
 
-
-system_prompt_file = 'system-prompt.txt'
-system_prompt = load_system_prompt(system_prompt_file)
-
-# Default system prompt
-DEFAULT_SYSTEM_PROMPT = """Please provide a concise summary of the following transcript, 
-highlighting the key points and main ideas discussed."""
 
 first_name = ""
 last_name = ""
@@ -153,19 +166,43 @@ with st.sidebar:
 
     # Add system prompt in a collapsed expander
     st.divider()
-    with st.expander("System Prompt", expanded=False):
-        updated_system_prompt = st.text_area(
-            "Customize the prompt for GPT:",
-            value=system_prompt,
+    with st.expander("System Prompts", expanded=False):
+        # Load all prompts
+        system_prompts = load_system_prompts()
+
+        # Prompt selector
+        selected_prompt_name = st.selectbox(
+            "Select a prompt template:",
+            options=list(system_prompts.keys())
+        )
+
+        # Show and allow editing of the selected prompt
+        updated_prompt = st.text_area(
+            "Customize the selected prompt:",
+            value=system_prompts[selected_prompt_name],
             height=150
         )
 
-        # Save the updated system prompt if it has changed
-        if updated_system_prompt != system_prompt:
-            save_system_prompt(system_prompt_file, updated_system_prompt)
-            # Update the current session's system_prompt
-            system_prompt = updated_system_prompt
-            st.success("System prompt updated successfully!")
+        # Add new prompt button
+        new_prompt_name = st.text_input("New prompt name")
+        if st.button("Add New Prompt"):
+            if new_prompt_name:
+                if new_prompt_name in system_prompts:
+                    st.error("A prompt with this name already exists!")
+                else:
+                    system_prompts[new_prompt_name] = "Enter your prompt here"
+                    save_system_prompts('system-prompts.json', system_prompts)
+                    st.success("New prompt template added!")
+                    st.rerun()
+
+        # Save changes to existing prompt
+        if updated_prompt != system_prompts[selected_prompt_name]:
+            system_prompts[selected_prompt_name] = updated_prompt
+            save_system_prompts('system-prompts.json', system_prompts)
+            st.success("Prompt updated successfully!")
+
+        # Use the selected prompt for processing
+        system_prompt = system_prompts[selected_prompt_name]
 
 
 # In the main content area, display the selected user's name

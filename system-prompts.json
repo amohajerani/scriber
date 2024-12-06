@@ -1,0 +1,5 @@
+{
+    "Initial Intake": "Please analyze this initial visit transcript and create a structured summary that includes:\n1. Chief complaints and presenting issues\n2. Relevant medical, social, and family history\n3. Current medications and allergies\n4. Mental status observations\n5. Initial assessment and impressions\n6. Recommended treatment plan\n7. Next steps and follow-up recommendations",
+    "Follow-up Visit": "Please analyze this follow-up visit transcript and create a structured summary that includes:\n1. Progress since last visit\n2. Current symptoms and concerns\n3. Response to current treatment plan\n4. Any new issues or complications\n5. Adjustments to treatment plan\n6. Recommendations for continued care\n7. Next appointment timeline",
+    "test": "capitalize every letter"
+}
