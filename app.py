@@ -8,33 +8,43 @@ from datetime import datetime
 import re
 from streamlit.components.v1 import html
 import pyperclip
-
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
+mongo_client = MongoClient(os.getenv('MONGO_URI'))
+db = mongo_client['scriber']
 
 
-# Load system prompt from a file
+def load_system_prompts():
+    """Load system prompts from MongoDB"""
+    try:
+        prompts = {}
+        for doc in db.system_messages.find():
+            prompts[doc['name']] = doc['content']
+        return prompts
+    except Exception as e:
+        st.error(f"Error loading system prompts: {str(e)}")
+        return {}
 
 
-def load_system_prompts(file_path='system-prompts.json'):
-    # Default prompts that will be used if file doesn't exist or is invalid
+def save_system_prompts(prompts):
+    """Save system prompts to MongoDB"""
+    try:
+        # Clear existing prompts
+        db.system_messages.delete_many({})
 
-    with open(file_path, 'r') as file:
-        loaded_prompts = json.load(file)
-        return loaded_prompts
-
-
-def save_system_prompts(file_path, prompts):
-    with open(file_path, 'w') as file:
-        json.dump(prompts, file, indent=4)
-
-# Save updated system prompt to a file
-
-
-def save_system_prompt(file_path, prompt):
-    with open(file_path, 'w') as file:
-        file.write(prompt)
+        # Insert new prompts
+        for name, content in prompts.items():
+            db.system_messages.insert_one({
+                "name": name,
+                "content": content,
+                "created_at": datetime.now(),
+                "last_modified": datetime.now()
+            })
+    except Exception as e:
+        st.error(f"Error saving system prompts: {str(e)}")
 
 
 first_name = ""
@@ -54,49 +64,68 @@ def get_summary(transcript, system_prompt):
     return response.choices[0].message.content
 
 
-def save_recording_data(transcript, summary, first_name, last_name, filename=None):
-    # Create base recordings directory
-    os.makedirs('recordings', exist_ok=True)
-
-    # Create user-specific directory using first and last name
-    user_dir = os.path.join('recordings', f"{first_name}-{last_name}")
-    os.makedirs(user_dir, exist_ok=True)
-
-    # Generate filename based on timestamp if not provided
-    if not filename:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M")
-        filename = os.path.join(user_dir, f"recording_{timestamp}.json")
-
-    data = {
-        "first_name": first_name,
-        "last_name": last_name,
+def save_recording_data(transcript, summary, first_name, last_name):
+    """
+    Save the recording data to the mongo database and return the document ID
+    """
+    result = db.recordings.insert_one({
         "transcript": transcript,
         "summary": summary,
-        "last_modified": datetime.now().isoformat()
-    }
-
-    with open(filename, 'w') as f:
-        json.dump(data, f, indent=4)
-
-    return filename
-
-
-def load_recording_data(filename):
-    with open(filename, 'r') as f:
-        return json.load(f)
+        "first_name": first_name,
+        "last_name": last_name,
+        "timestamp": datetime.now(),
+        "last_modified": datetime.now()
+    })
+    return str(result.inserted_id)
 
 
-def get_all_users():
-    if not os.path.exists('recordings'):
+def update_recording_data(document_id, transcript, summary):
+    """
+    Update an existing recording in the database
+    """
+    db.recordings.update_one(
+        {"_id": ObjectId(document_id)},
+        {
+            "$set": {
+                "transcript": transcript,
+                "summary": summary,
+                "last_modified": datetime.now()
+            }
+        }
+    )
+
+
+def get_patient_recordings(first_name, last_name):
+    """
+    Get all recordings for a specific patient
+    """
+    return list(db.recordings.find(
+        {"first_name": first_name, "last_name": last_name}
+    ).sort("timestamp", -1))
+
+
+def load_recording_data(document_id):
+    return db.recordings.find_one({"_id": ObjectId(document_id)})
+
+
+def get_all_patients():
+    """
+    Get all patients from MongoDB database
+    Returns a list of tuples containing (first_name, last_name, document_id)
+    """
+    try:
+        patients = list(db.patients.find({}, {
+            "first_name": 1,
+            "last_name": 1
+        }).sort("last_name", 1))  # Sort by last name
+
+        return [(p["first_name"], p["last_name"], str(p["_id"])) for p in patients]
+    except Exception as e:
+        st.error(f"Error fetching patients from database: {str(e)}")
         return []
-    users = [d for d in os.listdir('recordings') if os.path.isdir(
-        os.path.join('recordings', d))]
-    # Reformat user names for display by replacing hyphens with spaces
-    formatted_users = [d.replace('-', ' ') for d in users]
-    return formatted_users
 
 
-def split_user_name(combined_name):
+def split_patient_name(combined_name):
     # Split the name into first and last name based on space or hyphen
     parts = re.split(r'[- ]', combined_name)
     if len(parts) >= 2:
@@ -131,53 +160,110 @@ def create_copy_button(text, button_id):
     return copy_js
 
 
+def save_patient_data(first_name, last_name, notes=""):
+    """
+    Save patient data to MongoDB database
+    """
+    result = db.patients.insert_one({
+        "first_name": first_name,
+        "last_name": last_name,
+        "notes": notes,
+        "created_at": datetime.now(),
+        "last_modified": datetime.now()
+    })
+    return str(result.inserted_id)
+
+
+def update_patient_notes(patient_id, notes):
+    """
+    Update patient notes in MongoDB database
+    """
+    db.patients.update_one(
+        {"_id": ObjectId(patient_id)},
+        {
+            "$set": {
+                "notes": notes,
+                "last_modified": datetime.now()
+            }
+        }
+    )
+
+
+def get_patient_notes(patient_id):
+    """
+    Get patient notes from MongoDB database
+    """
+    patient = db.patients.find_one({"_id": ObjectId(patient_id)})
+    return patient.get("notes", "") if patient else ""
+
+
 # Streamlit UI
 st.title("Scribe")
 
-# Sidebar for user selection
+# Sidebar for patient selection
 with st.sidebar:
-    st.header("User Selection")
-    users = get_all_users()
-    if 'selected_user' not in st.session_state:
-        st.session_state.selected_user = ""
-    selected_user = st.session_state.selected_user
-    if users:
-        selected_user = st.selectbox(
-            "Select Existing User",
-            options=[""] + users,
-            format_func=lambda x: "Select a user..." if x == "" else x,
-            index=users.index(selected_user) +
-            1 if selected_user in users else 0
+    st.header("Patient Selection")
+    patients = get_all_patients()
+    if 'selected_patient' not in st.session_state:
+        st.session_state.selected_patient = ""
+        st.session_state.first_name = ""
+        st.session_state.last_name = ""
+
+    if patients:
+        # Format patient names for display
+        patient_options = [""] + [f"{p[0]} {p[1]}" for p in patients]
+        patient_ids = {f"{p[0]} {p[1]}": p[2] for p in patients}
+
+        selected_patient = st.selectbox(
+            "Select Existing Patient",
+            options=patient_options,
+            format_func=lambda x: "Select a patient..." if x == "" else x,
+            index=patient_options.index(
+                st.session_state.selected_patient) if st.session_state.selected_patient in patient_options else 0
         )
 
-        st.session_state.selected_user = selected_user
+        st.session_state.selected_patient = selected_patient
 
-        if selected_user:
-            first_name, last_name = split_user_name(selected_user)
+        if selected_patient:
+            first_name, last_name = split_patient_name(selected_patient)
+            st.session_state.first_name = first_name
+            st.session_state.last_name = last_name
+            # Store the patient ID in session state
+            st.session_state.selected_patient_id = patient_ids.get(
+                selected_patient)
         else:
-            first_name = last_name = ""
+            st.session_state.first_name = ""
+            st.session_state.last_name = ""
+            st.session_state.selected_patient_id = None
 
         st.divider()
 
-    st.subheader("Or Create New User")
+    st.subheader("Or Create New patient")
     new_first_name = st.text_input("First Name")
     new_last_name = st.text_input("Last Name")
 
-    if st.button("Create New User"):
+    if st.button("Create New patient"):
         if new_first_name and new_last_name:
             # Capitalize first and last name for directory creation
             formatted_first_name = new_first_name.capitalize()
             formatted_last_name = new_last_name.capitalize()
-            new_user_dir = os.path.join(
+            new_patient_dir = os.path.join(
                 'recordings', f"{formatted_first_name}-{formatted_last_name}")
-            os.makedirs(new_user_dir, exist_ok=True)
-            st.success(
-                f"Created new user: {formatted_first_name} {formatted_last_name}")
-            # Automatically select the new user
-            st.session_state.selected_user = f"{formatted_first_name} {formatted_last_name}"
-            st.session_state.first_name = formatted_first_name
-            st.session_state.last_name = formatted_last_name
-            st.rerun()
+            os.makedirs(new_patient_dir, exist_ok=True)
+
+            # Save patient to MongoDB
+            try:
+                patient_id = save_patient_data(
+                    formatted_first_name, formatted_last_name)
+                st.success(
+                    f"Created new patient: {formatted_first_name} {formatted_last_name}")
+                # Automatically select the new patient
+                st.session_state.selected_patient = f"{formatted_first_name} {formatted_last_name}"
+                st.session_state.first_name = formatted_first_name
+                st.session_state.last_name = formatted_last_name
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error saving patient to database: {str(e)}")
         else:
             st.error("Please enter both first and last name")
 
@@ -200,6 +286,12 @@ with st.sidebar:
             height=150
         )
 
+        # Save changes to existing prompt
+        if updated_prompt != system_prompts[selected_prompt_name]:
+            system_prompts[selected_prompt_name] = updated_prompt
+            save_system_prompts(system_prompts)
+            st.success("Prompt updated successfully!")
+
         # Add new prompt button
         new_prompt_name = st.text_input("New prompt name")
         if st.button("Add New Prompt"):
@@ -208,18 +300,9 @@ with st.sidebar:
                     st.error("A prompt with this name already exists!")
                 else:
                     system_prompts[new_prompt_name] = "Enter your prompt here"
-                    save_system_prompts('system-prompts.json', system_prompts)
+                    save_system_prompts(system_prompts)
                     st.success("New prompt template added!")
                     st.rerun()
-
-        # Save changes to existing prompt
-        if updated_prompt != system_prompts[selected_prompt_name]:
-            system_prompts[selected_prompt_name] = updated_prompt
-            save_system_prompts('system-prompts.json', system_prompts)
-            st.success("Prompt updated successfully!")
-
-        # Use the selected prompt for processing
-        system_prompt = system_prompts[selected_prompt_name]
 
     # Add this right after the system prompt expander in the sidebar
     with st.sidebar:
@@ -228,32 +311,26 @@ with st.sidebar:
         st.info(selected_prompt_name)
 
 
-# In the main content area, display the selected user's name
-if selected_user:
-    # Initialize notes in session state if it doesn't exist
+# In the main content area
+if st.session_state.selected_patient:
+    st.header(
+        f"{st.session_state.first_name} {st.session_state.last_name}".title())
+
+    # Load notes from MongoDB
     if 'notes' not in st.session_state:
-        st.session_state.notes = ""
+        st.session_state.notes = get_patient_notes(
+            st.session_state.selected_patient_id)
 
-    # Load notes from file if it exists
-    notes_file_path = os.path.join(
-        'recordings', f"{first_name}-{last_name}", 'notes.txt')
-    if os.path.exists(notes_file_path):
-        with open(notes_file_path, 'r') as f:
-            st.session_state.notes = f.read()
-
-    st.header(f"{first_name} {last_name}".title())
-
-    # Text area for notes
     st.subheader("Notes")
     notes = st.text_area("Enter your notes here:",
-                         value=st.session_state.notes, height=150)
+                         value=st.session_state.notes,
+                         height=150)
 
-    # Save notes to file when the save button is clicked
+    # Save notes to MongoDB when the save button is clicked
     if st.button("Save Notes"):
-        with open(notes_file_path, 'w') as f:
-            f.write(notes)
-        st.success("Notes saved successfully!")
+        update_patient_notes(st.session_state.selected_patient_id, notes)
         st.session_state.notes = notes
+        st.success("Notes saved successfully!")
 
     st.header("Recording Session")
 
@@ -270,6 +347,7 @@ if selected_user:
             # Generate summary
             try:
                 with st.spinner('Generating summary...'):
+                    system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
                     messages = [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": transcript}
@@ -283,7 +361,7 @@ if selected_user:
 
                     # Save to disk immediately
                     st.session_state.current_file = save_recording_data(
-                        transcript, summary, first_name, last_name)
+                        transcript, summary, st.session_state.first_name, st.session_state.last_name)
                     st.success("Recording saved successfully!")
             except Exception as e:
                 st.error(f"Error processing recording: {str(e)}")
@@ -327,12 +405,13 @@ if selected_user:
                         pyperclip.copy(saved_data["summary"])
                         st.toast('Copied to clipboard!')
                 with header_col3:
-                    if st.button("🔄", key="regenerate_summary", use_container_width=False):
+                    if st.button("���", key="regenerate_summary", use_container_width=False):
                         with st.spinner('Generating new summary...'):
+                            system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
                             new_summary = get_summary(
                                 edited_transcript, system_prompt)
                             # Update the saved data with new summary
-                            save_recording_data(edited_transcript, new_summary, first_name, last_name,
+                            save_recording_data(edited_transcript, new_summary, st.session_state.first_name, st.session_state.last_name,
                                                 filename=st.session_state.current_file)
                             st.success("Summary regenerated successfully!")
                             st.rerun()
@@ -347,98 +426,98 @@ if selected_user:
 
             # Add a button to save changes
             if st.button("Save Changes", key="save_current_btn"):
-                save_recording_data(edited_transcript, edited_summary, first_name, last_name,
+                save_recording_data(edited_transcript, edited_summary, st.session_state.first_name, st.session_state.last_name,
                                     filename=st.session_state.current_file)
                 st.success("Changes saved successfully!")
 
     # Add a section to load and edit previous recordings
     with st.expander("Load Previous Recordings"):
-        user_dir = os.path.join('recordings', f"{first_name}-{last_name}")
-        if os.path.exists(user_dir):
-            recording_files = [f for f in os.listdir(
-                user_dir) if f.endswith('.json')]
-            if recording_files:
-                selected_file = st.selectbox(
-                    "Select a recording to edit:",
-                    recording_files,
-                    format_func=lambda x: x.split('_')[1].split('.')[
-                        0],  # Show timestamp only
-                    key="recording_selector"
-                )
+        recordings = get_patient_recordings(
+            st.session_state.first_name, st.session_state.last_name)
+        if recordings:
+            # Format options for the selectbox
+            recording_options = [
+                (r["timestamp"].strftime("%Y-%m-%d %H:%M"), str(r["_id"]))
+                for r in recordings
+            ]
 
-                if selected_file:
-                    file_path = os.path.join(user_dir, selected_file)
-                    data = load_recording_data(file_path)
+            selected_recording = st.selectbox(
+                "Select a recording to edit:",
+                options=[r[1] for r in recording_options],
+                format_func=lambda x: next(
+                    r[0] for r in recording_options if r[1] == x),
+                key="recording_selector"
+            )
 
-                    # Format the last_modified date
-                    last_modified = datetime.fromisoformat(
-                        data['last_modified'])
-                    formatted_date = last_modified.strftime(
-                        "%Y-%m-%d %H:%M")
+            if selected_recording:
+                data = load_recording_data(selected_recording)
 
-                    col1, col2 = st.columns(2)
+                # Format the last_modified date directly since it's already a datetime object
+                formatted_date = data['last_modified'].strftime(
+                    "%Y-%m-%d %H:%M")
 
-                    with col1:
-                        # Create a container for subheader and icon
-                        header_col1, header_col2 = st.columns([0.8, 0.2])
-                        with header_col1:
-                            st.subheader("Transcript")
-                        with header_col2:
-                            st.write("")  # Spacing for vertical alignment
-                            if st.button("🔗", key=f"copy_transcript_prev_{selected_file}", use_container_width=False):
-                                pyperclip.copy(data["transcript"])
-                                st.toast('Copied to clipboard!')
-                        edited_transcript = st.text_area(
-                            label="Previous transcript content",
-                            label_visibility="hidden",
-                            value=data["transcript"],
-                            height=300,
-                            key="previous_transcript"
-                        )
+                col1, col2 = st.columns(2)
 
-                    with col2:
-                        # Create a container for subheader and icon
-                        header_col1, header_col2, header_col3 = st.columns(
-                            [0.6, 0.2, 0.2])
-                        with header_col1:
-                            st.subheader("Summary")
-                        with header_col2:
-                            st.write("")  # Spacing for vertical alignment
-                            if st.button("🔗", key=f"copy_summary_prev_{selected_file}", use_container_width=False):
-                                pyperclip.copy(data["summary"])
-                                st.toast('Copied to clipboard!')
-                        with header_col3:
-                            if st.button("🔄", key=f"regenerate_summary_prev_{selected_file}", use_container_width=False):
-                                with st.spinner('Generating new summary...'):
-                                    new_summary = get_summary(
-                                        edited_transcript, system_prompt)
-                                    save_recording_data(
-                                        edited_transcript, new_summary, first_name, last_name, filename=file_path)
-                                    st.success(
-                                        "Summary regenerated successfully!")
-                                    st.rerun()
+                with col1:
+                    # Create a container for subheader and icon
+                    header_col1, header_col2 = st.columns([0.8, 0.2])
+                    with header_col1:
+                        st.subheader("Transcript")
+                    with header_col2:
+                        st.write("")  # Spacing for vertical alignment
+                        if st.button("🔗", key=f"copy_transcript_prev_{selected_recording}", use_container_width=False):
+                            pyperclip.copy(data["transcript"])
+                            st.toast('Copied to clipboard!')
+                    edited_transcript = st.text_area(
+                        label="Previous transcript content",
+                        label_visibility="hidden",
+                        value=data["transcript"],
+                        height=300,
+                        key="previous_transcript"
+                    )
 
-                        edited_summary = st.text_area(
-                            label="Previous summary content",
-                            label_visibility="hidden",
-                            value=data["summary"],
-                            height=300,
-                            key="previous_summary"
-                        )
+                with col2:
+                    # Create a container for subheader and icon
+                    header_col1, header_col2, header_col3 = st.columns(
+                        [0.6, 0.2, 0.2])
+                    with header_col1:
+                        st.subheader("Summary")
+                    with header_col2:
+                        st.write("")  # Spacing for vertical alignment
+                        if st.button("🔗", key=f"copy_summary_prev_{selected_recording}", use_container_width=False):
+                            pyperclip.copy(data["summary"])
+                            st.toast('Copied to clipboard!')
+                    with header_col3:
+                        if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
+                            with st.spinner('Generating new summary...'):
+                                system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
+                                new_summary = get_summary(
+                                    edited_transcript, system_prompt)
+                                save_recording_data(
+                                    edited_transcript, new_summary, st.session_state.first_name, st.session_state.last_name, filename=selected_recording)
+                                st.success(
+                                    "Summary regenerated successfully!")
+                                st.rerun()
 
-                    # Display formatted last updated date
-                    st.markdown(f"**Last Updated:** {formatted_date}")
+                    edited_summary = st.text_area(
+                        label="Previous summary content",
+                        label_visibility="hidden",
+                        value=data["summary"],
+                        height=300,
+                        key="previous_summary"
+                    )
 
-                    if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
-                        save_recording_data(edited_transcript,
-                                            edited_summary,
-                                            st.session_state.first_name,
-                                            st.session_state.last_name,
-                                            filename=file_path)
-                        st.success("Changes saved successfully!")
-            else:
-                st.info("No previous recordings found for this user")
+                # Display formatted last updated date
+                st.markdown(f"**Last Updated:** {formatted_date}")
+
+                if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
+                    update_recording_data(
+                        selected_recording,
+                        edited_transcript,
+                        edited_summary
+                    )
+                    st.success("Changes saved successfully!")
         else:
-            st.info("No previous recordings found for this user")
+            st.info("No previous recordings found for this patient")
 else:
-    st.info("Please select a user from the sidebar")
+    st.info("Please select a patient from the sidebar")
