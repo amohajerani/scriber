@@ -23,11 +23,7 @@ def init_connection():
     try:
         # Add SSL configuration and increase timeouts
         client = MongoClient(
-            os.getenv('MONGO_URI'),
-            serverSelectionTimeoutMS=30000,  # Increased from 5000
-            connectTimeoutMS=30000,          # Increased from 20000
-            ssl=True,
-            ssl_cert_reqs=ssl.CERT_NONE     # Added SSL configuration
+            os.getenv('MONGO_URI')
         )
         # Test the connection
         client.admin.command('ping')
