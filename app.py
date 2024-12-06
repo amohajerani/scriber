@@ -39,6 +39,9 @@ else:
     st.error("Failed to initialize MongoDB connection")
     st.stop()
 
+# print the name of the collections
+print(db.list_collection_names())
+
 
 def load_system_prompts():
     """Load system prompts from MongoDB"""
