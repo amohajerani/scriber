@@ -21,6 +21,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 # Initialize session state right after imports and before any other Streamlit commands
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
+    st.session_state['provider_id'] = None
 
 # Initialize connection
 
@@ -54,8 +55,24 @@ def load_system_prompts():
     """Load system prompts from MongoDB"""
     try:
         prompts = {}
-        for doc in db.system_messages.find():
-            prompts[doc['name']] = doc['content']
+        query = {"provider_id": st.session_state.provider_id}
+        prompts_cursor = db.system_messages.find(query)
+
+        # If no prompts exist, create a default one
+        if db.system_messages.count_documents(query) == 0:
+            default_prompt = {
+                "name": "Default Summary",
+                "content": "You are a medical scribe assistant. Create a concise, professional summary of the medical conversation, highlighting key symptoms, diagnoses, and treatment plans. Format the summary in a clear, medical-note style.",
+                "provider_id": st.session_state.provider_id,
+                "created_at": datetime.now(),
+                "last_modified": datetime.now()
+            }
+            db.system_messages.insert_one(default_prompt)
+            prompts[default_prompt["name"]] = default_prompt["content"]
+        else:
+            for doc in prompts_cursor:
+                prompts[doc['name']] = doc['content']
+
         return prompts
     except Exception as e:
         st.error(f"Error loading system prompts: {str(e)}")
@@ -65,14 +82,16 @@ def load_system_prompts():
 def save_system_prompts(prompts):
     """Save system prompts to MongoDB"""
     try:
-        # Clear existing prompts
-        db.system_messages.delete_many({})
+        # Clear existing prompts for this provider
+        db.system_messages.delete_many(
+            {"provider_id": st.session_state.provider_id})
 
         # Insert new prompts
         for name, content in prompts.items():
             db.system_messages.insert_one({
                 "name": name,
                 "content": content,
+                "provider_id": st.session_state.provider_id,
                 "created_at": datetime.now(),
                 "last_modified": datetime.now()
             })
@@ -97,15 +116,15 @@ def get_summary(transcript, system_prompt):
     return response.choices[0].message.content
 
 
-def save_recording_data(transcript, summary, first_name, last_name):
+def save_recording_data(transcript, summary):
     """
     Save the recording data to the mongo database and return the document ID
     """
     result = db.recordings.insert_one({
         "transcript": transcript,
         "summary": summary,
-        "first_name": first_name,
-        "last_name": last_name,
+        "provider_id": st.session_state.provider_id,
+        "patient_id": st.session_state.selected_patient_id,
         "timestamp": datetime.now(),
         "last_modified": datetime.now()
     })
@@ -128,13 +147,14 @@ def update_recording_data(document_id, transcript, summary):
     )
 
 
-def get_patient_recordings(first_name, last_name):
+def get_patient_recordings(patient_id):
     """
     Get all recordings for a specific patient
     """
-    return list(db.recordings.find(
-        {"first_name": first_name, "last_name": last_name}
-    ).sort("timestamp", -1))
+    return list(db.recordings.find({
+        "patient_id": patient_id,
+        "provider_id": st.session_state.provider_id
+    }).sort("timestamp", -1))
 
 
 def load_recording_data(document_id):
@@ -142,15 +162,12 @@ def load_recording_data(document_id):
 
 
 def get_all_patients():
-    """
-    Get all patients from MongoDB database
-    Returns a list of tuples containing (first_name, last_name, document_id)
-    """
+    """Get all patients for the current provider"""
     try:
-        patients = list(db.patients.find({}, {
-            "first_name": 1,
-            "last_name": 1
-        }).sort("last_name", 1))  # Sort by last name
+        patients = list(db.patients.find(
+            {"provider_id": st.session_state.provider_id},
+            {"first_name": 1, "last_name": 1}
+        ).sort("last_name", 1))
 
         return [(p["first_name"], p["last_name"], str(p["_id"])) for p in patients]
     except Exception as e:
@@ -194,13 +211,12 @@ def create_copy_button(text, button_id):
 
 
 def save_patient_data(first_name, last_name, notes=""):
-    """
-    Save patient data to MongoDB database
-    """
+    """Save patient data to MongoDB database"""
     result = db.patients.insert_one({
         "first_name": first_name,
         "last_name": last_name,
         "notes": notes,
+        "provider_id": st.session_state.provider_id,
         "created_at": datetime.now(),
         "last_modified": datetime.now()
     })
@@ -242,8 +258,10 @@ if not st.session_state.authenticated:
             "Password", type="password", key="login_password_field")
 
         if st.button("Login", key="login_button"):
-            if verify_user(login_email, login_password, db):
+            provider_id = verify_user(login_email, login_password, db)
+            if provider_id:
                 st.session_state.authenticated = True
+                st.session_state.provider_id = provider_id
                 st.success("Logged in successfully!")
                 st.rerun()
             else:
@@ -438,7 +456,7 @@ if st.session_state.selected_patient:
 
                     # Save to disk immediately
                     st.session_state.current_file = save_recording_data(
-                        transcript, summary, st.session_state.first_name, st.session_state.last_name)
+                        transcript, summary)
                     st.success("Recording saved successfully!")
             except Exception as e:
                 st.error(f"Error processing recording: {str(e)}")
@@ -488,7 +506,7 @@ if st.session_state.selected_patient:
                             new_summary = get_summary(
                                 edited_transcript, system_prompt)
                             # Update the saved data with new summary
-                            save_recording_data(edited_transcript, new_summary, st.session_state.first_name, st.session_state.last_name,
+                            save_recording_data(edited_transcript, new_summary,
                                                 filename=st.session_state.current_file)
                             st.success("Summary regenerated successfully!")
                             st.rerun()
@@ -503,14 +521,14 @@ if st.session_state.selected_patient:
 
             # Add a button to save changes
             if st.button("Save Changes", key="save_current_btn"):
-                save_recording_data(edited_transcript, edited_summary, st.session_state.first_name, st.session_state.last_name,
+                save_recording_data(edited_transcript, edited_summary,
                                     filename=st.session_state.current_file)
                 st.success("Changes saved successfully!")
 
     # Add a section to load and edit previous recordings
     with st.expander("Load Previous Recordings"):
         recordings = get_patient_recordings(
-            st.session_state.first_name, st.session_state.last_name)
+            st.session_state.selected_patient_id)
         if recordings:
             # Format options for the selectbox
             recording_options = [
@@ -571,7 +589,7 @@ if st.session_state.selected_patient:
                                 new_summary = get_summary(
                                     edited_transcript, system_prompt)
                                 save_recording_data(
-                                    edited_transcript, new_summary, st.session_state.first_name, st.session_state.last_name, filename=selected_recording)
+                                    edited_transcript, new_summary, filename=selected_recording)
                                 st.success(
                                     "Summary regenerated successfully!")
                                 st.rerun()

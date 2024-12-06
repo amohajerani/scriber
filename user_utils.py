@@ -47,11 +47,13 @@ def hash_password(password: str) -> str:
     return hmac.new(salt.encode(), password.encode(), hashlib.sha256).hexdigest()
 
 
-def verify_user(email: str, password: str, db) -> bool:
-    """Verify provider credentials"""
+def verify_user(email: str, password: str, db) -> str:
+    """Verify provider credentials and return provider_id if successful"""
     provider = db.providers.find_one({"email": email})
     if not provider:
-        return False
+        return None
 
     hashed_password = hash_password(password)
-    return hmac.compare_digest(provider['password'], hashed_password)
+    if hmac.compare_digest(provider['password'], hashed_password):
+        return str(provider['_id'])
+    return None
