@@ -586,13 +586,17 @@ if st.session_state.selected_patient:
                     with header_col3:
                         if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
                             with st.spinner('Generating new summary...'):
-                                # Use the updated system prompt
+                                # Use the actual updated prompt content, not just the name
                                 new_summary = get_summary(
-                                    edited_transcript, updated_prompt)
+                                    edited_transcript,
+                                    updated_prompt  # Use the actual prompt content
+                                )
                                 update_recording_data(
-                                    selected_recording, edited_transcript, new_summary)
-                                st.success(
-                                    "Summary regenerated successfully!")
+                                    selected_recording,
+                                    edited_transcript,
+                                    new_summary
+                                )
+                                st.success("Summary regenerated successfully!")
                                 st.rerun()
 
                     edited_summary = st.text_area(
