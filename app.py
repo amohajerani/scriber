@@ -381,6 +381,9 @@ with st.sidebar:
             height=150
         )
 
+        # Store the current prompt in session state
+        st.session_state.current_prompt = updated_prompt
+
         # Save changes to existing prompt
         if updated_prompt != system_prompts[selected_prompt_name]:
             system_prompts[selected_prompt_name] = updated_prompt
@@ -586,10 +589,9 @@ if st.session_state.selected_patient:
                     with header_col3:
                         if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
                             with st.spinner('Generating new summary...'):
-                                # Use the actual updated prompt content, not just the name
                                 new_summary = get_summary(
                                     edited_transcript,
-                                    updated_prompt  # Use the actual prompt content
+                                    st.session_state.current_prompt  # Use the prompt from session state
                                 )
                                 update_recording_data(
                                     selected_recording,
