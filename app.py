@@ -442,7 +442,8 @@ if st.session_state.selected_patient:
             # Generate summary
             try:
                 with st.spinner('Generating summary...'):
-                    system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
+                    # Use the updated system prompt
+                    system_prompt = updated_prompt
                     messages = [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": transcript}
@@ -502,9 +503,9 @@ if st.session_state.selected_patient:
                 with header_col3:
                     if st.button("🔄", key="regenerate_summary", use_container_width=False):
                         with st.spinner('Generating new summary...'):
-                            system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
+                            # Use the updated system prompt
                             new_summary = get_summary(
-                                edited_transcript, system_prompt)
+                                edited_transcript, updated_prompt)
                             # Update the saved data with new summary
                             update_recording_data(
                                 st.session_state.current_file, edited_transcript, new_summary)
@@ -585,9 +586,9 @@ if st.session_state.selected_patient:
                     with header_col3:
                         if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
                             with st.spinner('Generating new summary...'):
-                                system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
+                                # Use the updated system prompt
                                 new_summary = get_summary(
-                                    edited_transcript, system_prompt)
+                                    edited_transcript, updated_prompt)
                                 update_recording_data(
                                     selected_recording, edited_transcript, new_summary)
                                 st.success(
