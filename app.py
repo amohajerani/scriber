@@ -500,18 +500,21 @@ if st.session_state.selected_patient:
                     st.subheader("Summary")
                 with header_col2:
                     st.write("")  # Spacing for vertical alignment
-                    if st.button("🔗", key=f"copy_summary_{saved_data['summary'][:10]}", use_container_width=False):
+                    if st.button("🔗", key=f"copy_summary_current_{saved_data['summary'][:10]}", use_container_width=False):
                         pyperclip.copy(saved_data["summary"])
                         st.toast('Copied to clipboard!')
                 with header_col3:
-                    if st.button("🔄", key="regenerate_summary", use_container_width=False):
+                    if st.button("🔄", key=f"regenerate_summary_current", use_container_width=False):
                         with st.spinner('Generating new summary...'):
-                            # Use the updated system prompt
                             new_summary = get_summary(
-                                edited_transcript, updated_prompt)
-                            # Update the saved data with new summary
+                                edited_transcript,
+                                st.session_state.current_prompt
+                            )
                             update_recording_data(
-                                st.session_state.current_file, edited_transcript, new_summary)
+                                st.session_state.current_file,
+                                edited_transcript,
+                                new_summary
+                            )
                             st.success("Summary regenerated successfully!")
                             st.rerun()
 
@@ -549,76 +552,79 @@ if st.session_state.selected_patient:
             )
 
             if selected_recording:
-                data = load_recording_data(selected_recording)
+                # Ensure we're not duplicating the current recording
+                if 'current_file' not in st.session_state or selected_recording != st.session_state.current_file:
+                    data = load_recording_data(selected_recording)
 
-                # Format the last_modified date directly since it's already a datetime object
-                formatted_date = data['last_modified'].strftime(
-                    "%Y-%m-%d %H:%M")
+                    # Format the last_modified date directly since it's already a datetime object
+                    formatted_date = data['last_modified'].strftime(
+                        "%Y-%m-%d %H:%M")
 
-                col1, col2 = st.columns(2)
+                    col1, col2 = st.columns(2)
 
-                with col1:
-                    # Create a container for subheader and icon
-                    header_col1, header_col2 = st.columns([0.8, 0.2])
-                    with header_col1:
-                        st.subheader("Transcript")
-                    with header_col2:
-                        st.write("")  # Spacing for vertical alignment
-                        if st.button("🔗", key=f"copy_transcript_prev_{selected_recording}", use_container_width=False):
-                            pyperclip.copy(data["transcript"])
-                            st.toast('Copied to clipboard!')
-                    edited_transcript = st.text_area(
-                        label="Previous transcript content",
-                        label_visibility="hidden",
-                        value=data["transcript"],
-                        height=300,
-                        key="previous_transcript"
-                    )
+                    with col1:
+                        # Create a container for subheader and icon
+                        header_col1, header_col2 = st.columns([0.8, 0.2])
+                        with header_col1:
+                            st.subheader("Transcript")
+                        with header_col2:
+                            st.write("")  # Spacing for vertical alignment
+                            if st.button("🔗", key=f"copy_transcript_prev_{selected_recording}", use_container_width=False):
+                                pyperclip.copy(data["transcript"])
+                                st.toast('Copied to clipboard!')
+                        edited_transcript = st.text_area(
+                            label="Previous transcript content",
+                            label_visibility="hidden",
+                            value=data["transcript"],
+                            height=300,
+                            key="previous_transcript"
+                        )
 
-                with col2:
-                    # Create a container for subheader and icon
-                    header_col1, header_col2, header_col3 = st.columns(
-                        [0.6, 0.2, 0.2])
-                    with header_col1:
-                        st.subheader("Summary")
-                    with header_col2:
-                        st.write("")  # Spacing for vertical alignment
-                        if st.button("🔗", key=f"copy_summary_prev_{selected_recording}", use_container_width=False):
-                            pyperclip.copy(data["summary"])
-                            st.toast('Copied to clipboard!')
-                    with header_col3:
-                        if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
-                            with st.spinner('Generating new summary...'):
-                                new_summary = get_summary(
-                                    edited_transcript,
-                                    st.session_state.current_prompt  # Use the prompt from session state
-                                )
-                                update_recording_data(
-                                    selected_recording,
-                                    edited_transcript,
-                                    new_summary
-                                )
-                                st.success("Summary regenerated successfully!")
-                                st.rerun()
+                    with col2:
+                        # Create a container for subheader and icon
+                        header_col1, header_col2, header_col3 = st.columns(
+                            [0.6, 0.2, 0.2])
+                        with header_col1:
+                            st.subheader("Summary")
+                        with header_col2:
+                            st.write("")  # Spacing for vertical alignment
+                            if st.button("🔗", key=f"copy_summary_prev_{selected_recording}", use_container_width=False):
+                                pyperclip.copy(data["summary"])
+                                st.toast('Copied to clipboard!')
+                        with header_col3:
+                            if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
+                                with st.spinner('Generating new summary...'):
+                                    new_summary = get_summary(
+                                        edited_transcript,
+                                        st.session_state.current_prompt
+                                    )
+                                    update_recording_data(
+                                        selected_recording,
+                                        edited_transcript,
+                                        new_summary
+                                    )
+                                    st.success(
+                                        "Summary regenerated successfully!")
+                                    st.rerun()
 
-                    edited_summary = st.text_area(
-                        label="Previous summary content",
-                        label_visibility="hidden",
-                        value=data["summary"],
-                        height=300,
-                        key="previous_summary"
-                    )
+                        edited_summary = st.text_area(
+                            label="Previous summary content",
+                            label_visibility="hidden",
+                            value=data["summary"],
+                            height=300,
+                            key="previous_summary"
+                        )
 
-                # Display formatted last updated date
-                st.markdown(f"**Last Updated:** {formatted_date}")
+                    # Display formatted last updated date
+                    st.markdown(f"**Last Updated:** {formatted_date}")
 
-                if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
-                    update_recording_data(
-                        selected_recording,
-                        edited_transcript,
-                        edited_summary
-                    )
-                    st.success("Changes saved successfully!")
+                    if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
+                        update_recording_data(
+                            selected_recording,
+                            edited_transcript,
+                            edited_summary
+                        )
+                        st.success("Changes saved successfully!")
         else:
             st.info("No previous recordings found for this patient")
 else:
