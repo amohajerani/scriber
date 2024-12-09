@@ -500,14 +500,14 @@ if st.session_state.selected_patient:
                         pyperclip.copy(saved_data["summary"])
                         st.toast('Copied to clipboard!')
                 with header_col3:
-                    if st.button("", key="regenerate_summary", use_container_width=False):
+                    if st.button("🔄", key="regenerate_summary", use_container_width=False):
                         with st.spinner('Generating new summary...'):
                             system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
                             new_summary = get_summary(
                                 edited_transcript, system_prompt)
                             # Update the saved data with new summary
-                            save_recording_data(edited_transcript, new_summary,
-                                                filename=st.session_state.current_file)
+                            update_recording_data(
+                                st.session_state.current_file, edited_transcript, new_summary)
                             st.success("Summary regenerated successfully!")
                             st.rerun()
 
@@ -588,8 +588,8 @@ if st.session_state.selected_patient:
                                 system_prompt = "You are a helpful assistant that creates concise summaries of conversations."
                                 new_summary = get_summary(
                                     edited_transcript, system_prompt)
-                                save_recording_data(
-                                    edited_transcript, new_summary, filename=selected_recording)
+                                update_recording_data(
+                                    selected_recording, edited_transcript, new_summary)
                                 st.success(
                                     "Summary regenerated successfully!")
                                 st.rerun()
