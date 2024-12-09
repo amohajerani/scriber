@@ -105,21 +105,17 @@ last_name = ""
 
 def get_summary(transcript, system_prompt):
     response = openai.chat.completions.create(
-
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": transcript}
         ]
     )
-
     return response.choices[0].message.content
 
 
 def save_recording_data(transcript, summary):
-    """
-    Save the recording data to the mongo database and return the document ID
-    """
+    """Save the recording data to the mongo database and return the document ID"""
     result = db.recordings.insert_one({
         "transcript": transcript,
         "summary": summary,
@@ -129,6 +125,25 @@ def save_recording_data(transcript, summary):
         "last_modified": datetime.now()
     })
     return str(result.inserted_id)
+
+
+def process_new_recording(transcript):
+    """Process a new recording and save it to the database"""
+    try:
+        with st.spinner('Generating summary...'):
+            system_prompt = st.session_state.current_prompt
+            summary = get_summary(transcript, system_prompt)
+
+            # Save to database and get the document ID
+            doc_id = save_recording_data(transcript, summary)
+            st.session_state.current_file = doc_id  # Store the current file ID
+            st.success("Recording saved successfully!")
+
+            # Force a rerun to refresh the recordings list
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error processing recording: {str(e)}")
+        st.stop()
 
 
 def update_recording_data(document_id, transcript, summary):
@@ -148,13 +163,11 @@ def update_recording_data(document_id, transcript, summary):
 
 
 def get_patient_recordings(patient_id):
-    """
-    Get all recordings for a specific patient
-    """
-    return list(db.recordings.find({
+    """Get all recordings for a specific patient"""
+    res = list(db.recordings.find({
         "patient_id": patient_id,
         "provider_id": st.session_state.provider_id
-    }).sort("timestamp", -1))
+    }).sort("timestamp", -1))  # Sort by timestamp in descending order
 
 
 def load_recording_data(document_id):
@@ -438,33 +451,10 @@ if st.session_state.selected_patient:
 
     # Rest of the recording logic...
     if transcript:
-        # Only process and save if it's a new transcript
+        # Only process if it's a new transcript
         if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
             st.session_state.last_transcript = transcript
-
-            # Generate summary
-            try:
-                with st.spinner('Generating summary...'):
-                    # Use the updated system prompt
-                    system_prompt = updated_prompt
-                    messages = [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": transcript}
-                    ]
-
-                    response = openai.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=messages
-                    )
-                    summary = response.choices[0].message.content
-
-                    # Save to disk immediately
-                    st.session_state.current_file = save_recording_data(
-                        transcript, summary)
-                    st.success("Recording saved successfully!")
-            except Exception as e:
-                st.error(f"Error processing recording: {str(e)}")
-                st.stop()
+            process_new_recording(transcript)
 
         # Load the saved data from disk
         if st.session_state.current_file:
@@ -666,3 +656,107 @@ def verify_user(email, password):
 # Add this right after the load_dotenv() call
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
+
+
+def process_new_recording(transcript):
+    """Process a new recording and save it to the database"""
+    try:
+        with st.spinner('Generating summary...'):
+            system_prompt = st.session_state.current_prompt
+            summary = get_summary(transcript, system_prompt)
+
+            # Save to database and get the document ID
+            doc_id = save_recording_data(transcript, summary)
+            st.session_state.current_file = doc_id  # Store the current file ID
+            st.success("Recording saved successfully!")
+
+            # Force a rerun to refresh the recordings list
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error processing recording: {str(e)}")
+        st.stop()
+
+
+# Replace the previous recordings section with a unified recordings view
+st.header("Visit Records")
+recordings = get_patient_recordings(st.session_state.selected_patient_id)
+
+if recordings:
+    recording_options = [
+        (r["timestamp"].strftime("%Y-%m-%d %H:%M"), str(r["_id"]))
+        for r in recordings
+    ]
+
+    selected_recording = st.selectbox(
+        "Select a recording:",
+        options=[r[1] for r in recording_options],
+        format_func=lambda x: next(r[0]
+                                   for r in recording_options if r[1] == x),
+        key="visit_recording_selector"
+    )
+
+    if selected_recording:
+        data = load_recording_data(selected_recording)
+        formatted_date = data['last_modified'].strftime("%Y-%m-%d %H:%M")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            header_col1, header_col2 = st.columns([0.8, 0.2])
+            with header_col1:
+                st.subheader("Transcript")
+            with header_col2:
+                if st.button("🔗", key=f"copy_transcript_{selected_recording}", use_container_width=False):
+                    pyperclip.copy(data["transcript"])
+                    st.toast('Copied to clipboard!')
+
+            edited_transcript = st.text_area(
+                label="Transcript content",
+                label_visibility="hidden",
+                value=data["transcript"],
+                height=300,
+                key="transcript"
+            )
+
+        with col2:
+            header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
+            with header_col1:
+                st.subheader("Summary")
+            with header_col2:
+                if st.button("🔗", key=f"copy_summary_{selected_recording}", use_container_width=False):
+                    pyperclip.copy(data["summary"])
+                    st.toast('Copied to clipboard!')
+            with header_col3:
+                if st.button("🔄", key=f"regenerate_summary_{selected_recording}", use_container_width=False):
+                    with st.spinner('Generating new summary...'):
+                        new_summary = get_summary(
+                            edited_transcript,
+                            st.session_state.current_prompt
+                        )
+                        update_recording_data(
+                            selected_recording,
+                            edited_transcript,
+                            new_summary
+                        )
+                        st.success("Summary regenerated successfully!")
+                        st.rerun()
+
+            edited_summary = st.text_area(
+                label="Summary content",
+                label_visibility="hidden",
+                value=data["summary"],
+                height=300,
+                key="summary"
+            )
+
+        st.markdown(f"**Last Updated:** {formatted_date}")
+
+        if st.button("Save Changes", key="save_changes"):
+            update_recording_data(
+                selected_recording,
+                edited_transcript,
+                edited_summary
+            )
+            st.success("Changes saved successfully!")
+else:
+    st.info("No recordings found for this patient")
