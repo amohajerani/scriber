@@ -168,6 +168,7 @@ def get_patient_recordings(patient_id):
         "patient_id": patient_id,
         "provider_id": st.session_state.provider_id
     }).sort("timestamp", -1))  # Sort by timestamp in descending order
+    return res
 
 
 def load_recording_data(document_id):
