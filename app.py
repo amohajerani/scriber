@@ -1,5 +1,5 @@
 import streamlit as st
-from whisper_stt import whisper_stt
+from scriber.stt import whisper_stt, deepgram_stt
 from dotenv import load_dotenv
 import os
 import openai
@@ -71,8 +71,8 @@ if st.session_state.selected_patient:
 
     # Recording session
     st.header("Recording Session")
-    transcript = whisper_stt(openai_api_key=os.getenv(
-        'OPENAI_API_KEY'), language='en', just_once=True)
+    transcript = deepgram_stt(deepgram_api_key=os.getenv(
+        'DEEPGRAM_API_KEY'), language='en', just_once=True)
 
     if transcript:
         # if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
