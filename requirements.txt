@@ -9,4 +9,4 @@ streamlit-mic-recorder
 pymongo
 werkzeug
 clipboard
-deepgram
+deepgram-sdk
