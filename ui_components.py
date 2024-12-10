@@ -178,24 +178,39 @@ def render_summary_column(saved_data, db_manager):
 
 
 def render_regenerate_button(saved_data, db_manager):
-    button_key = f"regenerate_summary_{str(saved_data['_id'])}_{datetime.now().timestamp()}"
-    if st.button("🔄",
-                 key=button_key,
-                 use_container_width=False):
-        with st.spinner('Generating new summary...'):
-            new_summary = get_summary(
-                saved_data["transcript"],
-                st.session_state.current_prompt
-            )
-            db_manager.update_recording_data(
-                str(saved_data["_id"]),
-                saved_data["transcript"],
-                new_summary
-            )
-            st.rerun()
+    button_key = f"regenerate_summary_{str(saved_data['_id'])}"
+
+    if st.button("🔄", key=button_key, use_container_width=False):
+        try:
+            with st.spinner('Generating new summary...'):
+                new_summary = get_summary(
+                    saved_data["transcript"],
+                    st.session_state.current_prompt
+                )
+
+                st.write(
+                    f"Regenerating summary for recording: {saved_data['_id']}")
+
+                db_manager.update_recording_data(
+                    saved_data["_id"],
+                    saved_data["transcript"],
+                    new_summary
+                )
+
+                if 'current_recording_id' in st.session_state:
+                    st.session_state.current_recording_id = str(
+                        saved_data['_id'])
+
+                st.success("Summary regenerated successfully!")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error regenerating summary: {str(e)}")
 
 
 def render_recording_selector(recordings, db_manager):
+    if 'current_recording_id' not in st.session_state:
+        st.session_state.current_recording_id = None
+
     recording_options = [
         (r["timestamp"].strftime("%Y-%m-%d %H:%M"), str(r["_id"]))
         for r in recordings
@@ -210,6 +225,7 @@ def render_recording_selector(recordings, db_manager):
     )
 
     if selected_recording:
+        st.session_state.current_recording_id = selected_recording
         saved_data = db_manager.load_recording_data(selected_recording)
         render_recording_section(saved_data, db_manager)
 
