@@ -72,12 +72,12 @@ if st.session_state.selected_patient:
     # Recording session
     st.header("Recording Session")
     transcript = whisper_stt(openai_api_key=os.getenv(
-        'OPENAI_API_KEY'), language='en')
+        'OPENAI_API_KEY'), language='en', just_once=True)
 
     if transcript:
-        if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
-            st.session_state.last_transcript = transcript
-            process_new_recording(transcript)
+        # if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
+        #    st.session_state.last_transcript = transcript
+        process_new_recording(transcript)
 
         if st.session_state.current_file:
             saved_data = db_manager.load_recording_data(
