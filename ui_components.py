@@ -188,9 +188,6 @@ def render_regenerate_button(saved_data, db_manager):
                     st.session_state.current_prompt
                 )
 
-                st.write(
-                    f"Regenerating summary for recording: {saved_data['_id']}")
-
                 db_manager.update_recording_data(
                     saved_data["_id"],
                     saved_data["transcript"],
@@ -201,7 +198,6 @@ def render_regenerate_button(saved_data, db_manager):
                     st.session_state.current_recording_id = str(
                         saved_data['_id'])
 
-                st.success("Summary regenerated successfully!")
                 st.rerun()
         except Exception as e:
             st.error(f"Error regenerating summary: {str(e)}")
