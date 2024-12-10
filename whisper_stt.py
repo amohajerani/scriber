@@ -5,7 +5,7 @@ from openai import OpenAI
 import os
 
 
-def whisper_stt(openai_api_key=None, start_prompt="Start recording", stop_prompt="Stop recording", just_once=False,
+def whisper_stt(openai_api_key=None, start_prompt="🔴 Start Recording", stop_prompt="⏹️ Stop Recording", just_once=False,
                 use_container_width=False, language=None, callback=None, args=(), kwargs=None, key=None):
     if not 'openai_client' in st.session_state:
         st.session_state.openai_client = OpenAI(

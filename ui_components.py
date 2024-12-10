@@ -67,13 +67,8 @@ def render_system_prompts(db_manager):
 
 
 def render_recording_section(saved_data, db_manager):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        render_transcript_column(saved_data, db_manager)
-
-    with col2:
-        render_summary_column(saved_data, db_manager)
+    render_transcript_column(saved_data, db_manager)
+    render_summary_column(saved_data, db_manager)
 
 
 def render_visit_records(db_manager):
@@ -137,50 +132,59 @@ def on_copy_click(text):
 
 
 def render_transcript_column(saved_data, db_manager):
-    header_col1, header_col2 = st.columns([0.8, 0.2])
-    with header_col1:
-        st.subheader("Transcript")
-#    with header_col2:
-#        st.button("📋",
-#                  on_click=on_copy_click,
-#                  args=(saved_data['transcript'],),
-#                  key=f"copy_transcript_{str(saved_data['_id'])}")
-#
-    return st.text_area(
-        label="Transcript content",
-        label_visibility="hidden",
-        value=saved_data["transcript"],
-        height=300,
-        key=f"transcript_{str(saved_data['_id'])}_{datetime.now().timestamp()}"
+    with st.expander("Transcript", expanded=False):
+        key = f"transcript_{str(saved_data['_id'])}"
+        transcript = st.text_area(
+            label="Transcript content",
+            label_visibility="hidden",
+            value=saved_data["transcript"],
+            height=300,
+            key=key,
+            on_change=lambda: update_transcript(saved_data, db_manager, key)
+        )
+
+
+def update_transcript(saved_data, db_manager, key):
+    db_manager.update_recording_data(
+        saved_data["_id"],
+        st.session_state[key],
+        saved_data["summary"]
     )
+    st.success("Transcript updated successfully!")
 
 
 def render_summary_column(saved_data, db_manager):
     header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
     with header_col1:
         st.subheader("Summary")
-#    with header_col2:
-#        st.button("📋",
-#                  on_click=on_copy_click,
-#                  args=(saved_data['summary'],),
-#                  key=f"copy_summary_{str(saved_data['_id'])}")
 
     with header_col3:
         render_regenerate_button(saved_data, db_manager)
 
-    return st.text_area(
+    key = f"summary_{str(saved_data['_id'])}"
+    summary = st.text_area(
         label="Summary content",
         label_visibility="hidden",
         value=saved_data["summary"],
         height=300,
-        key=f"summary_{str(saved_data['_id'])}_{datetime.now().timestamp()}"
+        key=key,
+        on_change=lambda: update_summary(saved_data, db_manager, key)
     )
+
+
+def update_summary(saved_data, db_manager, key):
+    db_manager.update_recording_data(
+        saved_data["_id"],
+        saved_data["transcript"],
+        st.session_state[key]
+    )
+    st.success("Summary updated successfully!")
 
 
 def render_regenerate_button(saved_data, db_manager):
     button_key = f"regenerate_summary_{str(saved_data['_id'])}"
 
-    if st.button("🔄", key=button_key, use_container_width=False):
+    if st.button("Rewrite", key=button_key, use_container_width=False):
         try:
             with st.spinner('Generating new summary...'):
                 new_summary = get_summary(
@@ -276,17 +280,20 @@ def split_patient_name(combined_name):
 
 
 def render_patient_notes(db_manager):
-    if 'notes' not in st.session_state:
-        st.session_state.notes = db_manager.get_patient_notes(
-            st.session_state.selected_patient_id)
+    with st.expander("Notes", expanded=False):
+        if 'notes' not in st.session_state:
+            st.session_state.notes = db_manager.get_patient_notes(
+                st.session_state.selected_patient_id)
 
-    st.subheader("Notes")
-    notes = st.text_area("Enter your notes here:",
-                         value=st.session_state.notes,
-                         height=150)
+        def save_notes():
+            db_manager.update_patient_notes(
+                st.session_state.selected_patient_id, st.session_state.notes)
+            st.success("Notes saved successfully!")
 
-    if st.button("Save Notes"):
-        db_manager.update_patient_notes(
-            st.session_state.selected_patient_id, notes)
-        st.session_state.notes = notes
-        st.success("Notes saved successfully!")
+        notes = st.text_area(
+            "Enter your notes here:",
+            value=st.session_state.notes,
+            height=150,
+            on_change=save_notes,
+            key="notes"
+        )
