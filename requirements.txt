@@ -6,6 +6,6 @@ python-dotenv
 #wave
 #aiohttp
 streamlit-mic-recorder
-pyperclip
 pymongo
 werkzeug
+clipboard

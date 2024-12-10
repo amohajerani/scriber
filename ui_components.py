@@ -1,11 +1,15 @@
 import streamlit as st
-import pyperclip
 from datetime import datetime
 from utils import get_summary
 import re
+import clipboard
 
 
 def render_sidebar(db_manager, process_new_recording):
+    # Initialize copied list in session state if it doesn't exist
+    if 'copied' not in st.session_state:
+        st.session_state.copied = []
+
     with st.sidebar:
         if st.button("Logout"):
             st.session_state.authenticated = False
@@ -126,19 +130,21 @@ def render_new_prompt_form(system_prompts, db_manager):
                 st.rerun()
 
 
+def on_copy_click(text):
+    st.session_state.copied.append(text)
+    clipboard.copy(text)
+    st.toast('Copied to clipboard!')
+
+
 def render_transcript_column(saved_data, db_manager):
-    header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
+    header_col1, header_col2 = st.columns([0.8, 0.2])
     with header_col1:
         st.subheader("Transcript")
     with header_col2:
-        try:
-            if st.button("📋",
-                         key=f"copy_transcript_{str(saved_data['_id'])}",
-                         use_container_width=False):
-                pyperclip.copy(saved_data["transcript"])
-                st.toast('Transcript copied to clipboard!')
-        except Exception as e:
-            st.error(f"Could not copy to clipboard: {str(e)}")
+        st.button("📋",
+                  on_click=on_copy_click,
+                  args=(saved_data['transcript'],),
+                  key=f"copy_transcript_{str(saved_data['_id'])}")
 
     return st.text_area(
         label="Transcript content",
@@ -154,14 +160,11 @@ def render_summary_column(saved_data, db_manager):
     with header_col1:
         st.subheader("Summary")
     with header_col2:
-        try:
-            if st.button("📋",
-                         key=f"copy_summary_{str(saved_data['_id'])}",
-                         use_container_width=False):
-                pyperclip.copy(saved_data["summary"])
-                st.toast('Summary copied to clipboard!')
-        except Exception as e:
-            st.error(f"Could not copy to clipboard: {str(e)}")
+        st.button("📋",
+                  on_click=on_copy_click,
+                  args=(saved_data['summary'],),
+                  key=f"copy_summary_{str(saved_data['_id'])}")
+
     with header_col3:
         render_regenerate_button(saved_data, db_manager)
 
