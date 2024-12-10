@@ -3,10 +3,8 @@ from whisper_stt import whisper_stt
 from dotenv import load_dotenv
 import os
 import openai
-from datetime import datetime
 
 from data import DatabaseManager
-from utils import create_user, verify_user
 from auth import render_auth_ui
 from ui_components import (
     render_sidebar,

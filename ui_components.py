@@ -5,30 +5,6 @@ from utils import get_summary
 import re
 
 
-def create_copy_button(text, button_id):
-    escaped_text = text.replace('`', '\\`').replace(
-        '\\', '\\\\').replace('\n', '\\n')
-    copy_js = f"""
-        <script>
-        function copyText{button_id}() {{
-            const text = `{escaped_text}`;
-            navigator.clipboard.writeText(text).then(function() {{
-                console.log('Text copied');
-            }}).catch(function(err) {{
-                console.error('Failed to copy text:', err);
-            }});
-        }}
-        </script>
-        <button 
-            onclick="copyText{button_id}()"
-            style="background-color: transparent; border: none; padding: 0; margin-left: 5px; cursor: pointer; font-size: 20px;"
-        >
-            🔗
-        </button>
-    """
-    return copy_js
-
-
 def render_sidebar(db_manager, process_new_recording):
     with st.sidebar:
         if st.button("Logout"):
@@ -151,21 +127,25 @@ def render_new_prompt_form(system_prompts, db_manager):
 
 
 def render_transcript_column(saved_data, db_manager):
-    header_col1, header_col2 = st.columns([0.8, 0.2])
+    header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
     with header_col1:
         st.subheader("Transcript")
     with header_col2:
-        st.write("")
-        if st.button("🔗", key=f"copy_transcript_{str(saved_data['_id'])}", use_container_width=False):
-            pyperclip.copy(saved_data["transcript"])
-            st.toast('Copied to clipboard!')
+        try:
+            if st.button("📋",
+                         key=f"copy_transcript_{str(saved_data['_id'])}",
+                         use_container_width=False):
+                pyperclip.copy(saved_data["transcript"])
+                st.toast('Transcript copied to clipboard!')
+        except Exception as e:
+            st.error(f"Could not copy to clipboard: {str(e)}")
 
     return st.text_area(
         label="Transcript content",
         label_visibility="hidden",
         value=saved_data["transcript"],
         height=300,
-        key=f"transcript_{str(saved_data['_id'])}"
+        key=f"transcript_{str(saved_data['_id'])}_{datetime.now().timestamp()}"
     )
 
 
@@ -174,10 +154,14 @@ def render_summary_column(saved_data, db_manager):
     with header_col1:
         st.subheader("Summary")
     with header_col2:
-        st.write("")
-        if st.button("🔗", key=f"copy_summary_{str(saved_data['_id'])}", use_container_width=False):
-            pyperclip.copy(saved_data["summary"])
-            st.toast('Copied to clipboard!')
+        try:
+            if st.button("📋",
+                         key=f"copy_summary_{str(saved_data['_id'])}",
+                         use_container_width=False):
+                pyperclip.copy(saved_data["summary"])
+                st.toast('Summary copied to clipboard!')
+        except Exception as e:
+            st.error(f"Could not copy to clipboard: {str(e)}")
     with header_col3:
         render_regenerate_button(saved_data, db_manager)
 
@@ -186,12 +170,14 @@ def render_summary_column(saved_data, db_manager):
         label_visibility="hidden",
         value=saved_data["summary"],
         height=300,
-        key=f"summary_{str(saved_data['_id'])}"
+        key=f"summary_{str(saved_data['_id'])}_{datetime.now().timestamp()}"
     )
 
 
 def render_regenerate_button(saved_data, db_manager):
-    if st.button("🔄", key=f"regenerate_summary_current", use_container_width=False):
+    if st.button("🔄",
+                 key=f"regenerate_summary_{str(saved_data['_id'])}",
+                 use_container_width=False):
         with st.spinner('Generating new summary...'):
             new_summary = get_summary(
                 saved_data["transcript"],
