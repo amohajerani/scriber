@@ -116,12 +116,13 @@ def render_existing_patient_selector(patients, db_manager):
 
 
 def render_new_patient_form(db_manager):
-    st.subheader("Or Create New patient")
-    new_first_name = st.text_input("First Name")
-    new_last_name = st.text_input("Last Name")
+    with st.expander("Create New Patient", expanded=False):
+        new_first_name = st.text_input("First Name")
+        new_last_name = st.text_input("Last Name")
 
-    if st.button("Create New patient"):
-        handle_new_patient_creation(new_first_name, new_last_name, db_manager)
+        if st.button("Create New Patient"):
+            handle_new_patient_creation(
+                new_first_name, new_last_name, db_manager)
 
 
 def on_copy_click(text):
