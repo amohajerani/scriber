@@ -281,6 +281,7 @@ def split_patient_name(combined_name):
 
 def render_patient_notes(db_manager):
     with st.expander("Notes", expanded=False):
+        # Initialize notes in session state if not already present
         if 'notes' not in st.session_state:
             st.session_state.notes = db_manager.get_patient_notes(
                 st.session_state.selected_patient_id)
@@ -290,7 +291,8 @@ def render_patient_notes(db_manager):
                 st.session_state.selected_patient_id, st.session_state.notes)
             st.success("Notes saved successfully!")
 
-        notes = st.text_area(
+        # Use the session state value directly in the text_area
+        st.text_area(
             "Enter your notes here:",
             value=st.session_state.notes,
             height=150,
