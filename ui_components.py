@@ -178,8 +178,9 @@ def render_summary_column(saved_data, db_manager):
 
 
 def render_regenerate_button(saved_data, db_manager):
+    button_key = f"regenerate_summary_{str(saved_data['_id'])}_{datetime.now().timestamp()}"
     if st.button("🔄",
-                 key=f"regenerate_summary_{str(saved_data['_id'])}",
+                 key=button_key,
                  use_container_width=False):
         with st.spinner('Generating new summary...'):
             new_summary = get_summary(
