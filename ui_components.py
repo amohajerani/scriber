@@ -1,10 +1,11 @@
 import streamlit as st
 import pyperclip
 from datetime import datetime
+from utils import get_summary
+import re
 
 
 def create_copy_button(text, button_id):
-    """Create a copy button for the specified text"""
     escaped_text = text.replace('`', '\\`').replace(
         '\\', '\\\\').replace('\n', '\\n')
     copy_js = f"""
@@ -28,184 +29,262 @@ def create_copy_button(text, button_id):
     return copy_js
 
 
-def show_patient_notes(db):
-    """Display and handle patient notes section"""
-    st.subheader("Notes")
+def render_sidebar(db_manager, process_new_recording):
+    with st.sidebar:
+        if st.button("Logout"):
+            st.session_state.authenticated = False
+            st.rerun()
 
-    # Initialize notes in session state if not present
+        st.divider()
+        render_patient_selection(db_manager)
+        render_system_prompts(db_manager)
+
+
+def render_patient_selection(db_manager):
+    st.header("Patient Selection")
+    patients = db_manager.get_all_patients(st.session_state.provider_id)
+
+    if 'selected_patient' not in st.session_state:
+        st.session_state.selected_patient = ""
+        st.session_state.first_name = ""
+        st.session_state.last_name = ""
+
+    render_existing_patient_selector(patients, db_manager)
+    render_new_patient_form(db_manager)
+
+
+def render_system_prompts(db_manager):
+    st.divider()
+    with st.expander("Select System Prompt", expanded=False):
+        system_prompts = db_manager.load_system_prompts(
+            st.session_state.provider_id)
+
+        selected_prompt_name = st.selectbox(
+            "Select a prompt template:",
+            options=list(system_prompts.keys())
+        )
+
+        updated_prompt = st.text_area(
+            "Customize the selected prompt:",
+            value=system_prompts[selected_prompt_name],
+            height=150
+        )
+
+        st.session_state.current_prompt = updated_prompt
+
+        if updated_prompt != system_prompts[selected_prompt_name]:
+            system_prompts[selected_prompt_name] = updated_prompt
+            db_manager.save_system_prompts(
+                system_prompts, st.session_state.provider_id)
+            st.success("Prompt updated successfully!")
+
+        render_new_prompt_form(system_prompts, db_manager)
+
+    with st.sidebar:
+        st.divider()
+        st.markdown("**Current Prompt Template:**")
+        st.info(selected_prompt_name)
+
+
+def render_recording_section(saved_data, db_manager):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        render_transcript_column(saved_data, db_manager)
+
+    with col2:
+        render_summary_column(saved_data, db_manager)
+
+
+def render_visit_records(db_manager):
+    st.header("Visit Records")
+    recordings = db_manager.get_patient_recordings(
+        st.session_state.selected_patient_id,
+        st.session_state.provider_id
+    )
+
+    if recordings:
+        render_recording_selector(recordings, db_manager)
+    else:
+        st.info("No recordings found for this patient")
+
+# Helper functions for the main UI components
+
+
+def render_existing_patient_selector(patients, db_manager):
+    if patients:
+        patient_options = [""] + [f"{p[0]} {p[1]}" for p in patients]
+        patient_ids = {f"{p[0]} {p[1]}": p[2] for p in patients}
+
+        selected_patient = st.selectbox(
+            "Select Existing Patient",
+            options=patient_options,
+            format_func=lambda x: "Select a patient..." if x == "" else x,
+            index=patient_options.index(
+                st.session_state.selected_patient) if st.session_state.selected_patient in patient_options else 0
+        )
+
+        update_patient_state(selected_patient, patient_ids)
+
+
+def render_new_patient_form(db_manager):
+    st.subheader("Or Create New patient")
+    new_first_name = st.text_input("First Name")
+    new_last_name = st.text_input("Last Name")
+
+    if st.button("Create New patient"):
+        handle_new_patient_creation(new_first_name, new_last_name, db_manager)
+
+
+def render_new_prompt_form(system_prompts, db_manager):
+    new_prompt_name = st.text_input("New prompt name")
+    if st.button("Add New Prompt"):
+        if new_prompt_name:
+            if new_prompt_name in system_prompts:
+                st.error("A prompt with this name already exists!")
+            else:
+                system_prompts[new_prompt_name] = "Enter your prompt here"
+                db_manager.save_system_prompts(
+                    system_prompts, st.session_state.provider_id)
+                st.success("New prompt template added!")
+                st.rerun()
+
+
+def render_transcript_column(saved_data, db_manager):
+    header_col1, header_col2 = st.columns([0.8, 0.2])
+    with header_col1:
+        st.subheader("Transcript")
+    with header_col2:
+        st.write("")
+        if st.button("🔗", key=f"copy_transcript_{str(saved_data['_id'])}", use_container_width=False):
+            pyperclip.copy(saved_data["transcript"])
+            st.toast('Copied to clipboard!')
+
+    return st.text_area(
+        label="Transcript content",
+        label_visibility="hidden",
+        value=saved_data["transcript"],
+        height=300,
+        key=f"transcript_{str(saved_data['_id'])}"
+    )
+
+
+def render_summary_column(saved_data, db_manager):
+    header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
+    with header_col1:
+        st.subheader("Summary")
+    with header_col2:
+        st.write("")
+        if st.button("🔗", key=f"copy_summary_{str(saved_data['_id'])}", use_container_width=False):
+            pyperclip.copy(saved_data["summary"])
+            st.toast('Copied to clipboard!')
+    with header_col3:
+        render_regenerate_button(saved_data, db_manager)
+
+    return st.text_area(
+        label="Summary content",
+        label_visibility="hidden",
+        value=saved_data["summary"],
+        height=300,
+        key=f"summary_{str(saved_data['_id'])}"
+    )
+
+
+def render_regenerate_button(saved_data, db_manager):
+    if st.button("🔄", key=f"regenerate_summary_current", use_container_width=False):
+        with st.spinner('Generating new summary...'):
+            new_summary = get_summary(
+                saved_data["transcript"],
+                st.session_state.current_prompt
+            )
+            db_manager.update_recording_data(
+                str(saved_data["_id"]),
+                saved_data["transcript"],
+                new_summary
+            )
+            st.rerun()
+
+
+def render_recording_selector(recordings, db_manager):
+    recording_options = [
+        (r["timestamp"].strftime("%Y-%m-%d %H:%M"), str(r["_id"]))
+        for r in recordings
+    ]
+
+    selected_recording = st.selectbox(
+        "Select a recording:",
+        options=[r[1] for r in recording_options],
+        format_func=lambda x: next(r[0]
+                                   for r in recording_options if r[1] == x),
+        key="visit_recording_selector"
+    )
+
+    if selected_recording:
+        saved_data = db_manager.load_recording_data(selected_recording)
+        render_recording_section(saved_data, db_manager)
+
+
+def update_patient_state(selected_patient, patient_ids):
+    st.session_state.selected_patient = selected_patient
+
+    if selected_patient:
+        first_name, last_name = split_patient_name(selected_patient)
+        st.session_state.first_name = first_name
+        st.session_state.last_name = last_name
+        st.session_state.selected_patient_id = patient_ids.get(
+            selected_patient)
+        if 'notes' in st.session_state:
+            del st.session_state.notes
+    else:
+        st.session_state.first_name = ""
+        st.session_state.last_name = ""
+        st.session_state.selected_patient_id = None
+        if 'notes' in st.session_state:
+            del st.session_state.notes
+
+
+def handle_new_patient_creation(new_first_name, new_last_name, db_manager):
+    if new_first_name and new_last_name:
+        formatted_first_name = new_first_name.capitalize()
+        formatted_last_name = new_last_name.capitalize()
+
+        try:
+            patient_id = db_manager.save_patient_data(
+                formatted_first_name,
+                formatted_last_name,
+                st.session_state.provider_id
+            )
+            st.success(
+                f"Created new patient: {formatted_first_name} {formatted_last_name}")
+            st.session_state.selected_patient = f"{formatted_first_name} {formatted_last_name}"
+            st.session_state.first_name = formatted_first_name
+            st.session_state.last_name = formatted_last_name
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error saving patient to database: {str(e)}")
+    else:
+        st.error("Please enter both first and last name")
+
+
+def split_patient_name(combined_name):
+    parts = re.split(r'[- ]', combined_name)
+    if len(parts) >= 2:
+        return parts[0], ' '.join(parts[1:])
+    return combined_name, ""
+
+
+def render_patient_notes(db_manager):
     if 'notes' not in st.session_state:
-        # Try to load existing notes from database
-        patient_data = db.get_patient_data(
+        st.session_state.notes = db_manager.get_patient_notes(
             st.session_state.selected_patient_id)
-        st.session_state.notes = patient_data.get(
-            'notes', '') if patient_data else ''
 
+    st.subheader("Notes")
     notes = st.text_area("Enter your notes here:",
                          value=st.session_state.notes,
                          height=150)
 
     if st.button("Save Notes"):
-        db.update_patient_notes(st.session_state.selected_patient_id, notes)
+        db_manager.update_patient_notes(
+            st.session_state.selected_patient_id, notes)
         st.session_state.notes = notes
         st.success("Notes saved successfully!")
-
-
-def show_current_recording_ui(saved_data, get_summary, update_recording_data, db):
-    """Display the current recording interface"""
-    col1, col2 = st.columns(2)
-
-    with col1:
-        header_col1, header_col2 = st.columns([0.8, 0.2])
-        with header_col1:
-            st.subheader("Transcript")
-        with header_col2:
-            st.write("")
-            if st.button("🔗", key=f"copy_transcript_{saved_data['transcript'][:10]}", use_container_width=False):
-                pyperclip.copy(saved_data["transcript"])
-                st.toast('Copied to clipboard!')
-
-        edited_transcript = st.text_area(
-            label="Transcript content",
-            label_visibility="hidden",
-            value=saved_data["transcript"],
-            height=300,
-            key="current_transcript"
-        )
-
-    with col2:
-        header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
-        with header_col1:
-            st.subheader("Summary")
-        with header_col2:
-            st.write("")
-            if st.button("🔗", key=f"copy_summary_current_{saved_data['summary'][:10]}", use_container_width=False):
-                pyperclip.copy(saved_data["summary"])
-                st.toast('Copied to clipboard!')
-        with header_col3:
-            if st.button("🔄", key=f"regenerate_summary_current", use_container_width=False):
-                with st.spinner('Generating new summary...'):
-                    new_summary = get_summary(
-                        edited_transcript,
-                        st.session_state.current_prompt
-                    )
-                    update_recording_data(
-                        st.session_state.current_file,
-                        edited_transcript,
-                        new_summary
-                    )
-                    st.success("Summary regenerated successfully!")
-                    st.rerun()
-
-        edited_summary = st.text_area(
-            label="Summary content",
-            label_visibility="hidden",
-            value=saved_data["summary"],
-            height=300,
-            key="current_summary"
-        )
-
-    if st.button("Save Changes", key="save_current_btn"):
-        db.save_recording(edited_transcript, edited_summary,
-                          filename=st.session_state.current_file)
-        st.success("Changes saved successfully!")
-
-    return edited_transcript, edited_summary
-
-
-def show_previous_recordings_ui(db, get_summary, update_recording_data):
-    """Display the previous recordings interface"""
-    with st.expander("Load Previous Recordings"):
-        recordings = db.get_patient_recordings(
-            st.session_state.selected_patient_id,
-            st.session_state.provider_id
-        )
-
-        if not recordings:
-            st.info("No previous recordings found for this patient")
-            return
-
-        recording_options = [
-            (r["timestamp"].strftime("%Y-%m-%d %H:%M"), str(r["_id"]))
-            for r in recordings
-        ]
-
-        selected_recording = st.selectbox(
-            "Select a recording to edit:",
-            options=[r[1] for r in recording_options],
-            format_func=lambda x: next(r[0]
-                                       for r in recording_options if r[1] == x),
-            key="recording_selector"
-        )
-
-        if selected_recording and (not hasattr(st.session_state, 'current_file') or
-                                   selected_recording != st.session_state.current_file):
-            show_previous_recording_content(
-                selected_recording, db, get_summary, update_recording_data)
-
-
-def show_previous_recording_content(selected_recording, db, get_summary, update_recording_data):
-    """Display content for a selected previous recording"""
-    data = db.get_recording(selected_recording)
-    formatted_date = data['last_modified'].strftime("%Y-%m-%d %H:%M")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        header_col1, header_col2 = st.columns([0.8, 0.2])
-        with header_col1:
-            st.subheader("Transcript")
-        with header_col2:
-            st.write("")
-            if st.button("🔗", key=f"copy_transcript_prev_{selected_recording}", use_container_width=False):
-                pyperclip.copy(data["transcript"])
-                st.toast('Copied to clipboard!')
-
-        edited_transcript = st.text_area(
-            label="Previous transcript content",
-            label_visibility="hidden",
-            value=data["transcript"],
-            height=300,
-            key="previous_transcript"
-        )
-
-    with col2:
-        header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
-        with header_col1:
-            st.subheader("Summary")
-        with header_col2:
-            st.write("")
-            if st.button("🔗", key=f"copy_summary_prev_{selected_recording}", use_container_width=False):
-                pyperclip.copy(data["summary"])
-                st.toast('Copied to clipboard!')
-        with header_col3:
-            if st.button("🔄", key=f"regenerate_summary_prev_{selected_recording}", use_container_width=False):
-                with st.spinner('Generating new summary...'):
-                    new_summary = get_summary(
-                        edited_transcript,
-                        st.session_state.current_prompt
-                    )
-                    update_recording_data(
-                        selected_recording,
-                        edited_transcript,
-                        new_summary
-                    )
-                    st.success("Summary regenerated successfully!")
-                    st.rerun()
-
-        edited_summary = st.text_area(
-            label="Previous summary content",
-            label_visibility="hidden",
-            value=data["summary"],
-            height=300,
-            key="previous_summary"
-        )
-
-    st.markdown(f"**Last Updated:** {formatted_date}")
-
-    if st.button("Save Changes to Selected Recording", key="save_previous_btn"):
-        update_recording_data(
-            selected_recording,
-            edited_transcript,
-            edited_summary
-        )
-        st.success("Changes saved successfully!")

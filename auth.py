@@ -1,5 +1,5 @@
 import streamlit as st
-from user_utils import create_user, verify_user
+from utils import create_user, verify_user
 
 
 def render_auth_ui(db):

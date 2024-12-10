@@ -1,3 +1,4 @@
+import openai
 import re
 from werkzeug.security import generate_password_hash
 from typing import Tuple
@@ -57,3 +58,14 @@ def verify_user(email: str, password: str, db) -> str:
     if hmac.compare_digest(provider['password'], hashed_password):
         return str(provider['_id'])
     return None
+
+
+def get_summary(transcript, system_prompt):
+    response = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": transcript}
+        ]
+    )
+    return response.choices[0].message.content
