@@ -327,7 +327,6 @@ if st.session_state.selected_patient:
                                 edited_transcript,
                                 new_summary
                             )
-                            st.success("Summary regenerated successfully!")
                             st.rerun()
 
                 edited_summary = st.text_area(
@@ -410,8 +409,9 @@ if st.session_state.selected_patient:
                                 edited_transcript,
                                 new_summary
                             )
+                            edited_summary = new_summary
+                            data["summary"] = new_summary
                             st.success("Summary regenerated successfully!")
-                            st.rerun()
 
                 edited_summary = st.text_area(
                     label="Summary content",
