@@ -285,18 +285,19 @@ def render_patient_notes(db_manager):
             st.session_state.notes = db_manager.get_patient_notes(
                 st.session_state.selected_patient_id)
 
-        def save_notes(new_value):
+        notes_input_key = "notes_input"
+
+        def save_notes():
+            new_value = st.session_state[notes_input_key]
             st.session_state.notes = new_value
             db_manager.update_patient_notes(
                 st.session_state.selected_patient_id, new_value)
             st.success("Notes saved successfully!")
 
-        # Use a key that doesn't conflict with session state
         st.text_area(
             "Enter your notes here:",
-            key="notes_input",
+            key=notes_input_key,
             value=st.session_state.notes,
             height=150,
-            on_change=save_notes,
-            args=(st.session_state.notes,)
+            on_change=save_notes
         )
