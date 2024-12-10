@@ -1,5 +1,5 @@
 import streamlit as st
-from scriber.stt import whisper_stt, deepgram_stt
+from stt import deepgram_stt
 from dotenv import load_dotenv
 import os
 import openai
