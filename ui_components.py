@@ -58,7 +58,20 @@ def render_system_prompts(db_manager):
                 system_prompts, st.session_state.provider_id)
             st.success("Prompt updated successfully!")
 
-        render_new_prompt_form(system_prompts, db_manager)
+    with st.expander("Create New Prompt", expanded=False):
+        new_prompt_name = st.text_input("New prompt name")
+        new_prompt_content = st.text_area("New prompt content", height=150)
+
+        if st.button("Add New Prompt"):
+            if new_prompt_name:
+                if new_prompt_name in system_prompts:
+                    st.error("A prompt with this name already exists!")
+                else:
+                    system_prompts[new_prompt_name] = new_prompt_content
+                    db_manager.save_system_prompts(
+                        system_prompts, st.session_state.provider_id)
+                    st.success("New prompt template added!")
+                    st.rerun()
 
     with st.sidebar:
         st.divider()
@@ -109,20 +122,6 @@ def render_new_patient_form(db_manager):
 
     if st.button("Create New patient"):
         handle_new_patient_creation(new_first_name, new_last_name, db_manager)
-
-
-def render_new_prompt_form(system_prompts, db_manager):
-    new_prompt_name = st.text_input("New prompt name")
-    if st.button("Add New Prompt"):
-        if new_prompt_name:
-            if new_prompt_name in system_prompts:
-                st.error("A prompt with this name already exists!")
-            else:
-                system_prompts[new_prompt_name] = "Enter your prompt here"
-                db_manager.save_system_prompts(
-                    system_prompts, st.session_state.provider_id)
-                st.success("New prompt template added!")
-                st.rerun()
 
 
 def on_copy_click(text):
@@ -286,16 +285,18 @@ def render_patient_notes(db_manager):
             st.session_state.notes = db_manager.get_patient_notes(
                 st.session_state.selected_patient_id)
 
-        def save_notes():
+        def save_notes(new_value):
+            st.session_state.notes = new_value
             db_manager.update_patient_notes(
-                st.session_state.selected_patient_id, st.session_state.notes)
+                st.session_state.selected_patient_id, new_value)
             st.success("Notes saved successfully!")
 
-        # Use the session state value directly in the text_area
+        # Use a key that doesn't conflict with session state
         st.text_area(
             "Enter your notes here:",
+            key="notes_input",
             value=st.session_state.notes,
             height=150,
             on_change=save_notes,
-            key="notes"
+            args=(st.session_state.notes,)
         )
