@@ -140,12 +140,12 @@ def render_transcript_column(saved_data, db_manager):
     header_col1, header_col2 = st.columns([0.8, 0.2])
     with header_col1:
         st.subheader("Transcript")
-    with header_col2:
-        st.button("📋",
-                  on_click=on_copy_click,
-                  args=(saved_data['transcript'],),
-                  key=f"copy_transcript_{str(saved_data['_id'])}")
-
+#    with header_col2:
+#        st.button("📋",
+#                  on_click=on_copy_click,
+#                  args=(saved_data['transcript'],),
+#                  key=f"copy_transcript_{str(saved_data['_id'])}")
+#
     return st.text_area(
         label="Transcript content",
         label_visibility="hidden",
@@ -159,11 +159,11 @@ def render_summary_column(saved_data, db_manager):
     header_col1, header_col2, header_col3 = st.columns([0.6, 0.2, 0.2])
     with header_col1:
         st.subheader("Summary")
-    with header_col2:
-        st.button("📋",
-                  on_click=on_copy_click,
-                  args=(saved_data['summary'],),
-                  key=f"copy_summary_{str(saved_data['_id'])}")
+#    with header_col2:
+#        st.button("📋",
+#                  on_click=on_copy_click,
+#                  args=(saved_data['summary'],),
+#                  key=f"copy_summary_{str(saved_data['_id'])}")
 
     with header_col3:
         render_regenerate_button(saved_data, db_manager)
