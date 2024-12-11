@@ -6,6 +6,7 @@ from openai import OpenAI
 from deepgram import DeepgramClient, PrerecordedOptions
 import os
 import httpx
+import asyncio
 
 
 async def transcribe_audio(audio_bytes, deepgram_client, language=None):
@@ -31,7 +32,6 @@ async def transcribe_audio(audio_bytes, deepgram_client, language=None):
             options,
             timeout=httpx.Timeout(300.0, connect=10.0)
         )
-
 
         # Extract transcript from the response structure
         return response["results"]["channels"][0]["alternatives"][0]["transcript"]
@@ -62,4 +62,3 @@ def deepgram_stt(deepgram_api_key=None):
             ))
 
     return output
-
