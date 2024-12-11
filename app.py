@@ -44,7 +44,7 @@ def process_new_recording(transcript):
             )
             st.session_state.current_file = doc_id
             st.success("Recording saved successfully!")
-            st.rerun()
+
     except Exception as e:
         st.error(f"Error processing recording: {str(e)}")
         st.stop()
@@ -72,17 +72,11 @@ if st.session_state.selected_patient:
     # Recording session
     st.header("Recording Session")
     transcript = deepgram_stt(deepgram_api_key=os.getenv(
-        'DEEPGRAM_API_KEY'), language='en', just_once=True)
+        'DEEPGRAM_API_KEY'))
 
     if transcript:
-        # if 'last_transcript' not in st.session_state or transcript != st.session_state.last_transcript:
-        #    st.session_state.last_transcript = transcript
         process_new_recording(transcript)
-
-        if st.session_state.current_file:
-            saved_data = db_manager.load_recording_data(
-                st.session_state.current_file)
-            render_recording_section(saved_data, db_manager)
+        transcript = None
 
     # Render visit records
     render_visit_records(db_manager)
