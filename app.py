@@ -3,7 +3,6 @@ from stt import deepgram_stt
 from dotenv import load_dotenv
 import os
 import openai
-from audio import AudioRecorder
 from data import DatabaseManager
 from auth import render_auth_ui
 from ui_components import (
@@ -50,7 +49,6 @@ def process_new_recording(transcript):
         st.stop()
 
 
-
 # Authentication UI
 if not st.session_state.authenticated:
     render_auth_ui(db)
@@ -79,7 +77,6 @@ if st.session_state.selected_patient:
     if transcript:
         process_new_recording(transcript)
         transcript = None
-
 
     # Render visit records
     render_visit_records(db_manager)
