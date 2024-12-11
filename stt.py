@@ -1,7 +1,5 @@
 from audio_recorder_streamlit import audio_recorder
 import streamlit as st
-import io
-from openai import OpenAI
 
 from deepgram import DeepgramClient, PrerecordedOptions
 import os
@@ -9,11 +7,9 @@ import httpx
 import asyncio
 
 
-async def transcribe_audio(audio_bytes, deepgram_client, language=None):
+async def transcribe_audio(audio_data, deepgram_client):
 
     try:
-        # Initialize the Deepgram client
-        deepgram = DeepgramClient()
 
         # Set up transcription options
         options = PrerecordedOptions(
@@ -27,7 +23,7 @@ async def transcribe_audio(audio_bytes, deepgram_client, language=None):
         source = {'buffer': audio_data}
 
         # Request transcription with increased timeout for larger files
-        response = deepgram.listen.rest.v("1").transcribe_file(
+        response = deepgram_client.listen.rest.v("1").transcribe_file(
             source,
             options,
             timeout=httpx.Timeout(300.0, connect=10.0)
