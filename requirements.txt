@@ -5,4 +5,4 @@ pymongo
 werkzeug
 clipboard
 deepgram-sdk
-pyaudio
+audio-recorder-streamlit
