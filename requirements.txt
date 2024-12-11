@@ -1,11 +1,6 @@
 streamlit
-#pyaudio
-#deepgram-sdk
 openai
 python-dotenv
-#wave
-#aiohttp
-streamlit-mic-recorder
 pymongo
 werkzeug
 clipboard
