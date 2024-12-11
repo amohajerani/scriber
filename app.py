@@ -3,12 +3,11 @@ from stt import deepgram_stt
 from dotenv import load_dotenv
 import os
 import openai
-
+from audio import AudioRecorder
 from data import DatabaseManager
 from auth import render_auth_ui
 from ui_components import (
     render_sidebar,
-    render_recording_section,
     render_visit_records,
     render_patient_notes
 )
@@ -21,6 +20,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
     st.session_state['provider_id'] = None
+    st.session_state['current_file'] = None
 
 # Initialize database connection
 db_manager = DatabaseManager()
@@ -50,6 +50,7 @@ def process_new_recording(transcript):
         st.stop()
 
 
+
 # Authentication UI
 if not st.session_state.authenticated:
     render_auth_ui(db)
@@ -59,7 +60,7 @@ if not st.session_state.authenticated:
 st.title("Scribe")
 
 # Render sidebar
-render_sidebar(db_manager, process_new_recording)
+render_sidebar(db_manager)
 
 # Main content area
 if st.session_state.selected_patient:
@@ -71,12 +72,14 @@ if st.session_state.selected_patient:
 
     # Recording session
     st.header("Recording Session")
+
     transcript = deepgram_stt(deepgram_api_key=os.getenv(
         'DEEPGRAM_API_KEY'))
 
     if transcript:
         process_new_recording(transcript)
         transcript = None
+
 
     # Render visit records
     render_visit_records(db_manager)

@@ -5,7 +5,7 @@ import re
 import clipboard
 
 
-def render_sidebar(db_manager, process_new_recording):
+def render_sidebar(db_manager):
     # Initialize copied list in session state if it doesn't exist
     if 'copied' not in st.session_state:
         st.session_state.copied = []

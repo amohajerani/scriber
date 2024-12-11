@@ -2,31 +2,36 @@ from audio_recorder_streamlit import audio_recorder
 import streamlit as st
 import io
 from openai import OpenAI
+
 from deepgram import DeepgramClient, PrerecordedOptions
 import os
-import asyncio
+import httpx
 
 
 async def transcribe_audio(audio_bytes, deepgram_client, language=None):
+
     try:
+        # Initialize the Deepgram client
+        deepgram = DeepgramClient()
+
+        # Set up transcription options
         options = PrerecordedOptions(
-            smart_format=True,
-            punctuate=True,
-            language=language or "en",
-            model="nova-2"
+            model="nova-2",  # Using their latest model
+            smart_format=True,  # Enable smart formatting
+            language="en",  # Set to English
+            punctuate=True,  # Add punctuation
         )
 
-        # Create a dict with buffer and mimetype
-        payload = {
-            "buffer": audio_bytes,
-            "mimetype": "audio/wav"
-        }
+        # Create the source dictionary with the audio buffer
+        source = {'buffer': audio_data}
 
-        # Use transcribe_file for audio data from buffer
-        response = await deepgram_client.listen.asyncrest.v("1").transcribe_file(
-            payload,
-            options
+        # Request transcription with increased timeout for larger files
+        response = deepgram.listen.rest.v("1").transcribe_file(
+            source,
+            options,
+            timeout=httpx.Timeout(300.0, connect=10.0)
         )
+
 
         # Extract transcript from the response structure
         return response["results"]["channels"][0]["alternatives"][0]["transcript"]
@@ -57,3 +62,4 @@ def deepgram_stt(deepgram_api_key=None):
             ))
 
     return output
+
