@@ -30,11 +30,26 @@ else:
     st.error("Failed to initialize MongoDB connection")
     st.stop()
 
-# Initialize recorder and recording state if not exists
-if 'audio_recorder' not in st.session_state:
-    st.session_state.audio_recorder = AudioRecorder()
-if 'is_recording' not in st.session_state:
-    st.session_state.is_recording = False
+
+def process_new_recording(transcript):
+    try:
+        with st.spinner('Generating summary...'):
+            system_prompt = st.session_state.current_prompt
+            summary = get_summary(transcript, system_prompt)
+            doc_id = db_manager.save_recording_data(
+                transcript,
+                summary,
+                st.session_state.provider_id,
+                st.session_state.selected_patient_id
+            )
+            st.session_state.current_file = doc_id
+            st.success("Recording saved successfully!")
+
+    except Exception as e:
+        st.error(f"Error processing recording: {str(e)}")
+        st.stop()
+
+
 
 # Authentication UI
 if not st.session_state.authenticated:
@@ -58,45 +73,13 @@ if st.session_state.selected_patient:
     # Recording session
     st.header("Recording Session")
 
-    # Create a button that toggles between Start and Stop
-    if not st.session_state.is_recording:
-        if st.button("Start Recording"):
-            st.session_state.is_recording = True
-            st.session_state.audio_recorder.start_recording()
-            st.rerun()
-    else:
-        if st.button("Stop Recording"):
-            st.session_state.is_recording = False
-            audio = st.session_state.audio_recorder.stop_recording()
-            if not audio:
-                st.error("No audio data recorded")
-                st.stop()
+    transcript = deepgram_stt(deepgram_api_key=os.getenv(
+        'DEEPGRAM_API_KEY'))
 
-            if audio:
-                st.write('audio size: ', len(audio))
-                with st.spinner('Transcribing audio...'):
-                    transcript = deepgram_stt(audio)
+    if transcript:
+        process_new_recording(transcript)
+        transcript = None
 
-                if transcript:
-                    try:
-                        with st.spinner('Generating summary...'):
-                            summary = get_summary(
-                                transcript, st.session_state.current_prompt)
-                            doc_id = db_manager.save_recording_data(
-                                transcript,
-                                summary,
-                                st.session_state.provider_id,
-                                st.session_state.selected_patient_id
-                            )
-                            st.success("Recording saved successfully!")
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Error processing recording: {str(e)}")
-                        st.stop()
-
-    # Display current recording status
-    if st.session_state.is_recording:
-        st.warning("🎙️ Recording in progress...")
 
     # Render visit records
     render_visit_records(db_manager)
